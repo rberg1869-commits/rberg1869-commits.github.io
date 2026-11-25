@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CW Decoder</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="CW Decoder">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0e0e0e">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a quiet station instrument; reads at a glance from across the shack.
+   IDEA: a Swiss railway departure board, but the departures are Morse characters.
+   PICTURE: the live waterfall with a red tuning bar, and the copy itself in big type.
+   COLOUR and TYPE: black, white, one grey, signal red; Archivo wide and heavy for numerals.
+   LAYOUT: thick top rule, hanging numerals, waterfall, then the copy fills the screen. */
+:root{--bg:#fff;--ink:#0e0e0e;--grey:#6b6b6b;--line:#d9d9d9;--red:#e4002b;--panel:#f3f3f3}
+@media (prefers-color-scheme:dark){:root{--bg:#0e0e0e;--ink:#f2f2f2;--grey:#8c8c8c;--line:#2a2a2a;--red:#ff2a4d;--panel:#171717}}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Archivo",system-ui,-apple-system,sans-serif;overflow:hidden;-webkit-text-size-adjust:100%}
+.app{height:100dvh;display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto;border-top:8px solid var(--ink);
+  padding:env(safe-area-inset-top) max(16px,env(safe-area-inset-right)) env(safe-area-inset-bottom) max(16px,env(safe-area-inset-left))}
+header{display:flex;align-items:center;gap:12px;padding:12px 0 8px;flex-wrap:wrap}
+h1{margin:0;font-size:22px;font-weight:800;font-stretch:112%;letter-spacing:-.01em}
+.status{color:var(--grey);font-size:14px;flex:1 1 220px}
+.status b{color:var(--ink);font-weight:600}
+button,select{font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:2px solid var(--ink);border-radius:0;min-height:44px;padding:0 14px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+button.primary{background:var(--ink);color:var(--bg);font-weight:700;min-width:150px}
+button.primary.live{background:var(--red);border-color:var(--red);color:#fff}
+.seg{display:inline-flex}.seg button{border-right-width:0}.seg button:last-child{border-right-width:2px}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.readout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;align-items:end;gap:8px 20px;padding:6px 0 10px;border-bottom:2px solid var(--ink)}
+.num{font-weight:800;font-stretch:112%;font-size:clamp(40px,7vw,80px);line-height:.95;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.num.dim{color:var(--grey)}
+.lab{font-size:13px;color:var(--grey);margin-top:4px}
+.key{display:flex;flex-direction:column;align-items:center}
+.led{width:34px;height:34px;border-radius:50%;border:3px solid var(--red);background:transparent;transition:background .03s}
+.led.on{background:var(--red);box-shadow:0 0 18px var(--red)}
+.fall{position:relative;height:clamp(96px,17vh,170px);margin:10px 0 0;background:#000;touch-action:none;cursor:crosshair}
+.fall canvas{position:absolute;inset:0;width:100%;height:100%}
+.band{position:absolute;top:0;bottom:18px;background:rgba(228,0,43,.18);border-left:2px solid var(--red);border-right:2px solid var(--red);pointer-events:none}
+.scale{position:absolute;left:0;right:0;bottom:0;height:18px;font-size:11px;color:#aaa;pointer-events:none;background:rgba(0,0,0,.55)}
+.scale span{position:absolute;transform:translateX(-50%);top:2px}
+.copy{overflow-y:auto;padding:12px 0;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.ln{display:grid;grid-template-columns:5.5em minmax(0,1fr);gap:10px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--line)}
+.ln time{font-size:13px;color:var(--grey);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ln .x{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:var(--size,30px);line-height:1.25;overflow-wrap:anywhere;white-space:pre-wrap}
+.ln:last-child .x::after{content:"";display:inline-block;width:.55em;height:1em;margin-left:2px;vertical-align:-.12em;background:var(--red);animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.ln:last-child .x::after{animation:none}.led{transition:none}}
+.empty{color:var(--grey);font-size:18px;max-width:46em;padding:8px 0}
+.empty strong{color:var(--ink)}
+.bar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:10px 0 12px;border-top:2px solid var(--ink)}
+.grp{display:flex;align-items:center;gap:6px}
+.grp .l{font-size:13px;color:var(--grey);margin-right:2px}
+.meter{width:90px;height:10px;background:var(--line);position:relative}
+.meter i{position:absolute;inset:0 auto 0 0;background:var(--ink);width:0}
+details{flex-basis:100%}
+summary{display:inline-flex;align-items:center;min-height:44px;cursor:pointer;font-weight:700;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+";display:inline-block;width:1.2em;font-weight:800}
+details[open] summary::before{content:"\2212"}
+.more{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px 28px;padding:8px 0 4px;max-height:42vh;overflow-y:auto}
+.more label{display:block;font-size:14px;color:var(--grey);margin-bottom:6px}
+.more input[type=range]{width:100%;height:44px;accent-color:var(--red)}
+.more p,.more li{margin:0 0 8px;font-size:15px;max-width:60ch}
+.more ol{margin:0;padding-left:1.2em}
+.more h3{margin:0 0 6px;font-size:16px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+.resume{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.7);z-index:5}
+.resume.show{display:grid}
+.resume button{background:var(--red);border-color:var(--red);color:#fff;font-size:22px;padding:16px 28px;min-height:64px}
+@media (max-width:600px){
+  .readout{grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:4px 10px}
+  .ln{grid-template-columns:1fr}.ln time{font-size:12px}
+  button.primary{min-width:0}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>CW Decoder</h1>
+    <div class="status" id="status">Tap <b>Start listening</b> and allow the microphone.</div>
+    <button class="primary" id="go">Start listening</button>
+  </header>
+
+  <section class="readout" aria-label="Live readings">
+    <div><div class="num dim" id="wpm">--</div><div class="lab">WPM</div></div>
+    <div><div class="num" id="tone">650</div><div class="lab">Hz tone</div></div>
+    <div><div class="num dim" id="snr">--</div><div class="lab">dB signal</div></div>
+    <div class="key"><div class="led" id="led" aria-hidden="true"></div><div class="lab">Key</div></div>
+  </section>
+
+  <div class="fall" id="fall" aria-label="Waterfall. Tap a signal to tune to it.">
+    <canvas id="wf"></canvas>
+    <div class="band" id="band"></div>
+    <div class="scale" id="scale"></div>
+  </div>
+
+  <main class="copy" id="out" aria-label="Decoded text">
+    <div class="empty" id="empty">
+      <p><strong>Decoded CW appears here in big type.</strong> Put the iPad near the radio speaker, or run a cable from the radio's audio out to the iPad, tune a CW signal, and tap <strong>Start listening</strong>. Tap a signal on the waterfall to lock onto it, or leave Tone on Auto.</p>
+      <p>No radio handy? Choose <strong>Test</strong> below for a practice signal.</p>
+    </div>
+  </main>
+
+  <div class="bar">
+    <div class="grp"><span class="l">Source</span><div class="seg"><button id="srcMic" aria-pressed="true">Mic</button><button id="srcTest" aria-pressed="false">Test</button></div></div>
+    <div class="grp"><span class="l">Tone</span><div class="seg"><button id="tDn" aria-label="Tone down 10 Hz">&minus;</button><button id="tAuto" aria-pressed="true">Auto</button><button id="tUp" aria-label="Tone up 10 Hz">+</button></div></div>
+    <div class="grp"><span class="l">Filter</span><div class="seg"><button data-bw="40">Narrow</button><button data-bw="60">Normal</button><button data-bw="100">Wide</button></div></div>
+    <div class="grp"><span class="l">Text</span><div class="seg"><button id="aDn" aria-label="Smaller text">A&minus;</button><button id="aUp" aria-label="Larger text">A+</button></div></div>
+    <div class="grp"><button id="copyBtn">Copy</button><button id="clearBtn">Clear</button></div>
+    <div class="grp"><span class="l">Input</span><div class="meter" aria-hidden="true"><i id="lvl"></i></div><span class="l" id="lvlTxt">off</span></div>
+    <details id="moreBox">
+      <summary>Settings and hookup help</summary>
+      <div class="more">
+        <div>
+          <label for="sq">Squelch: <span id="sqv"></span> dB. Raise it if noise prints junk letters, lower it to dig out weak signals.</label>
+          <input type="range" id="sq" min="4" max="20" step="1">
+          <label for="spd">Speed: <span id="spdv"></span></label>
+          <input type="range" id="spd" min="0" max="50" step="1">
+          <label for="dev">Audio input</label>
+          <select id="dev"><option value="">Default input</option></select>
+        </div>
+        <div>
+          <h3>Hooking up the IC-746</h3>
+          <ol>
+            <li>Easiest: set the iPad a foot from the speaker. Keep the room quiet.</li>
+            <li>Cleanest: a cable from the radio's audio out into a USB-C headset adapter on the iPad, then pick it under Audio input.</li>
+            <li>On the radio: CW mode, 500 Hz filter or wider, noise blanker off unless static is bad.</li>
+          </ol>
+        </div>
+        <div>
+          <h3>Leaving it running</h3>
+          <p>Keep this page in front; the iPad stops the microphone if Safari goes to the background or the screen locks.</p>
+          <p id="wakeNote">The page asks the iPad to keep the screen on while listening.</p>
+          <p>For a full-screen app icon: Share, then Add to Home Screen.</p>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+<div class="resume" id="resume"><button id="resumeBtn">Tap to resume listening</button></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script id="dsp" type="text/plain">
+// CW tone envelope detector.
+// Mixes the audio down at the decode tone (quadrature), low-pass filters I and Q
+// with a 4th order Butterworth, and emits the average magnitude every hopMs.
+// Plain class with no imports so the same text runs in an AudioWorklet,
+// in the page itself, and in Node for testing.
+class CWEnvelope {
+  constructor(sampleRate, opts) {
+    opts = opts || {};
+    this.fs = sampleRate;
+    this.hopMs = opts.hopMs || 5;
+    this.hop = Math.max(1, Math.round(this.fs * this.hopMs / 1000));
+    this.c = 1; this.s = 0;          // oscillator phasor
+    this.acc = 0; this.n = 0; this.k = 0;
+    this.setTone(opts.tone || 700);
+    this.setBandwidth(opts.bw || 100);
+  }
+  setTone(hz) {
+    this.tone = hz;
+    const w = 2 * Math.PI * hz / this.fs;
+    this.cd = Math.cos(w); this.sd = Math.sin(w);
+  }
+  setBandwidth(bw) {
+    this.bw = bw;
+    const fc = Math.max(10, bw / 2);
+    this.f1 = CWEnvelope.lp(fc, this.fs, 0.5412);
+    this.f2 = CWEnvelope.lp(fc, this.fs, 1.3066);
+    this.z = new Float64Array(8);
+  }
+  static lp(fc, fs, q) {
+    const w = 2 * Math.PI * fc / fs, cw = Math.cos(w), al = Math.sin(w) / (2 * q), a0 = 1 + al;
+    return { b0: (1 - cw) / 2 / a0, b1: (1 - cw) / a0, b2: (1 - cw) / 2 / a0, a1: -2 * cw / a0, a2: (1 - al) / a0 };
+  }
+  process(x, emit) {
+    const f1 = this.f1, f2 = this.f2, z = this.z, cd = this.cd, sd = this.sd, hop = this.hop;
+    let c = this.c, s = this.s, acc = this.acc, n = this.n;
+    for (let k = 0; k < x.length; k++) {
+      const v = x[k];
+      let i = v * c, q = -v * s;
+      const nc = c * cd - s * sd; s = s * cd + c * sd; c = nc;
+      let y = f1.b0 * i + z[0]; z[0] = f1.b1 * i - f1.a1 * y + z[1]; z[1] = f1.b2 * i - f1.a2 * y; i = y;
+      y = f2.b0 * i + z[2]; z[2] = f2.b1 * i - f2.a1 * y + z[3]; z[3] = f2.b2 * i - f2.a2 * y; i = y;
+      y = f1.b0 * q + z[4]; z[4] = f1.b1 * q - f1.a1 * y + z[5]; z[5] = f1.b2 * q - f1.a2 * y; q = y;
+      y = f2.b0 * q + z[6]; z[6] = f2.b1 * q - f2.a1 * y + z[7]; z[7] = f2.b2 * q - f2.a2 * y; q = y;
+      acc += Math.sqrt(i * i + q * q);
+      if (++n >= hop) {
+        emit(2 * acc / n); acc = 0; n = 0;
+        const m = 1 / Math.sqrt(c * c + s * s); c *= m; s *= m;   // keep the phasor on the unit circle
+      }
+    }
+    this.c = c; this.s = s; this.acc = acc; this.n = n;
+  }
+}
+</script>
+<script>
+// Adaptive Morse decoder. Takes envelope frames (one every frameMs) from CWEnvelope,
+// decides key up or key down against a self-adjusting threshold, measures the
+// timing, learns the sending speed and spacing, and emits characters as they complete.
+const MORSE = {
+  '.-': 'A', '-...': 'B', '-.-.': 'C', '-..': 'D', '.': 'E', '..-.': 'F', '--.': 'G', '....': 'H',
+  '..': 'I', '.---': 'J', '-.-': 'K', '.-..': 'L', '--': 'M', '-.': 'N', '---': 'O', '.--.': 'P',
+  '--.-': 'Q', '.-.': 'R', '...': 'S', '-': 'T', '..-': 'U', '...-': 'V', '.--': 'W', '-..-': 'X',
+  '-.--': 'Y', '--..': 'Z', '-----': '0', '.----': '1', '..---': '2', '...--': '3', '....-': '4',
+  '.....': '5', '-....': '6', '--...': '7', '---..': '8', '----.': '9', '.-.-.-': '.', '--..--': ',',
+  '..--..': '?', '-..-.': '/', '-...-': '=', '-....-': '-', '---...': ':', '-.-.-.': ';', '.----.': "'",
+  '.-..-.': '"', '-.--.-': ')', '.--.-.': '@', '-.-.--': '!', '..--.-': '_',
+  '.-.-.': '<AR>', '...-.-': '<SK>', '-.--.': '<KN>', '.-...': '<AS>', '-.-.-': '<KA>', '...-.': '<SN>',
+  '........': '<HH>'
+};
+
+function twoMeans(vals) {               // 2-cluster k-means on log values; returns null if one cluster
+  const L = vals.map(Math.log);
+  let lo = Math.min.apply(null, L), hi = Math.max.apply(null, L), nl = 0, nh = 0;
+  if (hi - lo < Math.log(1.6)) return null;
+  for (let it = 0; it < 10; it++) {
+    const mid = (lo + hi) / 2; let sl = 0, sh = 0; nl = 0; nh = 0;
+    for (const x of L) { if (x < mid) { sl += x; nl++; } else { sh += x; nh++; } }
+    if (!nl || !nh) return null;
+    lo = sl / nl; hi = sh / nh;
+  }
+  return { lo: Math.exp(lo), hi: Math.exp(hi), nl, nh };
+}
+
+class CWDecoder {
+  constructor(opts) {
+    opts = opts || {};
+    this.frameMs = opts.frameMs || 5;
+    this.onChar = opts.onChar || function () {};
+    this.onKey = opts.onKey || function () {};
+    this.squelch = opts.squelch != null ? opts.squelch : 9;  // mark level above the floor needed to print
+    this.fixedWpm = opts.fixedWpm || 0;                         // 0 means learn the speed
+    this.reset(opts.startWpm || 18);
+  }
+  reset(wpm) {
+    this.dit = this.fixedWpm ? 1200 / this.fixedWpm : 1200 / (wpm || 18);
+    this.boundary = 2 * this.dit;
+    this.gapUnit = this.dit; this.wordGap = 0;
+    this.floor = null; this.peak = null; this.count = 0;
+    this.state = false; this.cand = false; this.candRun = 0; this.runMs = 0;
+    this.marks = []; this.gaps = []; this.longGaps = [];
+    this.elems = []; this.wordPending = false;
+    this.markSum = 0; this.markN = 0;
+    this.markLevel = 0; this.open = false;
+    this.pending = []; this.sinceOpen = 0; this.sinceMark = 1e9; this.openChar = false;
+  }
+  setFixedWpm(w) {
+    this.fixedWpm = w || 0;
+    if (w) { this.dit = 1200 / w; this.boundary = 2 * this.dit; this.gapUnit = this.dit; }
+  }
+  get wpm() { return 1200 / this.dit; }
+  get snr() { return this.open ? Math.max(0, this.markLevel) : 0; }
+  get unit() { return 0.5 * (this.dit + this.gapUnit); }
+
+  push(v) {
+    const fm = this.frameMs;
+    this.count++;
+    if (this.count < 10) return;                              // let the filters settle
+    const db = Math.max(-160, 20 * Math.log10(v + 1e-12));
+    if (this.count < 40) { this.initSum = (this.initSum || 0) + db; return; }
+    if (this.floor == null) { this.floor = this.initSum / 30 - 3; this.peak = this.floor; }
+    // Noise floor: running 20th percentile of the level, in dB.
+    // Learn the floor from key-up time only (skipping the filter's decay tail), or from a long carrier.
+    if (db > this.floor) this.floor += 0.03; else this.floor -= 0.12;   // running 20th percentile
+    // Signal peak: fast attack, follows fading while keyed, sinks to the floor when idle.
+    if (db > this.peak) this.peak += (db - this.peak) * 0.3;
+    else if (this.state) this.peak += (db - this.peak) * 0.08;
+    else this.peak -= (this.peak - this.floor) * 0.002;
+    if (this.peak < this.floor) this.peak = this.floor;
+
+    const S = this.peak - this.floor;
+    const ref = Math.max(this.markLevel, S - 4);          // typical keyed level above the floor
+    const thr = this.floor + Math.max(4, (5.5 + ref) / 2, ref - 6);
+    const hyst = Math.min(2, 0.1 * S);
+    const want = this.state ? db > thr - hyst : db > thr;
+
+    const minRun = Math.min(40, Math.max(2 * fm, 0.25 * this.dit));
+    if (want !== this.state) {
+      if (want === this.cand) this.candRun += fm; else { this.cand = want; this.candRun = fm; }
+      if (this.candRun >= minRun) {
+        const prior = this.runMs - this.candRun + fm;
+        if (this.state) this.endMark(prior); else this.endGap(prior);
+        this.state = want; this.runMs = this.candRun; this.candRun = 0;
+        if (this.state) { this.markSum = 0; this.markN = 0; }
+        this.onKey(this.state && this.open);
+        return;
+      }
+    } else { this.cand = this.state; this.candRun = 0; }
+    this.runMs += fm;
+    this.sinceMark = this.state ? 0 : this.sinceMark + fm;
+    if (this.state) { this.markSum += db - this.floor; this.markN++; }
+    else this.idle(this.runMs);
+  }
+
+  endMark(ms) {
+    const lvl = this.markN ? this.markSum / this.markN : 0;
+    this.markLevel = 0.6 * this.markLevel + 0.4 * lvl;
+    const wasOpen = this.open;
+    if (!this.open && this.markLevel > this.squelch) this.open = true;
+    else if (this.open && this.markLevel < this.squelch - 2) this.open = false;
+    if (this.open && !wasOpen) { if (this.marks.length > 6) this.marks = this.marks.slice(-6); this.sinceOpen = 0; this.openChar = true; }
+    if (this.open) this.sinceOpen++;
+    if (ms > Math.max(10 * this.dit, 600)) { this.elems = []; return; }   // a carrier or tune-up
+    this.elems.push({ ms: ms, lvl: lvl });
+    if (this.open) {
+      this.marks.push(ms); if (this.marks.length > 24) this.marks.shift(); this.learn();
+      if (this.sinceOpen >= 10 && this.pending.length) this.flush();
+    }
+  }
+
+  endGap(ms) {
+    if (!this.open) return;
+    const u = this.unit;
+    if (ms < 2 * u) { this.gaps.push(ms); if (this.gaps.length > 24) this.gaps.shift(); }
+    else if (ms < 40 * u) { this.longGaps.push(ms); if (this.longGaps.length > 30) this.longGaps.shift(); this.learnSpacing(); }
+  }
+
+  idle(ms) {
+    const u = this.unit;
+    if (this.elems.length && ms > 2 * u) { this.emit(); }
+    const wg = this.wordGap || 5 * u;
+    if (this.wordPending && ms > wg) { this.out(' '); this.wordPending = false; }
+    if (ms > 2000) this.flush();
+    if (ms > 3000 && this.open) { this.open = false; this.markLevel = Math.min(this.markLevel, this.squelch - 2); }
+  }
+
+  decodeElems(el) {
+    const b = this.boundary;
+    const code = el.map(d => (d.ms < b ? '.' : '-')).join('');
+    return code.length > 8 ? '*' : (MORSE[code] || '*');
+  }
+
+  emit() {
+    let el = this.elems; this.elems = [];
+    if (!this.open) return;
+    if (this.openChar) {                       // drop noise blips caught just before the signal began
+      const keep = 0.6 * Math.max.apply(null, el.map(e => e.lvl));
+      el = el.filter(e => e.lvl >= keep);
+      this.openChar = false;
+      if (!el.length) return;
+    }
+    this.wordPending = true;
+    if (this.sinceOpen < 10 && !this.fixedWpm) { this.pending.push(el); return; }   // speed not settled yet
+    this.flush();
+    this.onChar(this.decodeElems(el));
+  }
+
+  out(c) { if (this.pending.length) this.pending.push(c); else this.onChar(c); }
+
+  flush() {
+    if (!this.pending.length) return;
+    const p = this.pending; this.pending = [];
+    for (const t of p) this.onChar(typeof t === 'string' ? t : this.decodeElems(t));
+  }
+
+  learn() {
+    if (this.fixedWpm) return;
+    const m = this.marks;
+    const w = m.length < 10 ? 0.8 : 0.4;
+    const c = m.length >= 3 ? twoMeans(m) : null;
+    if (c && c.hi / c.lo > 1.8 && c.hi / c.lo < 5) {
+      const est = (c.nl * c.lo + c.nh * c.hi / 3) / (c.nl + c.nh);
+      this.dit = (1 - w) * this.dit + w * est;
+      this.boundary = Math.sqrt(c.lo * c.hi);
+    } else if (m.length) {
+      const recent = m.slice(-4);
+      const mean = Math.exp(recent.map(Math.log).reduce((a, b) => a + b, 0) / recent.length);
+      const isDash = mean > 2 * this.dit;
+      this.dit = 0.75 * this.dit + 0.25 * (isDash ? mean / 3 : mean);
+      this.boundary = 2 * this.dit;
+    }
+    this.dit = Math.min(240, Math.max(20, this.dit));
+    if (this.boundary < 1.5 * this.dit || this.boundary > 3.2 * this.dit) this.boundary = 2 * this.dit;
+    if (this.gaps.length >= 3) {
+      const g = this.gaps.slice().sort((a, b) => a - b);
+      this.gapUnit = Math.min(1.5 * this.dit, Math.max(0.6 * this.dit, g[g.length >> 1]));
+    }
+  }
+
+  learnSpacing() {
+    let g = this.longGaps;
+    const u = this.unit;
+    if (g.length < 3) { this.wordGap = 0; return; }
+    let c = twoMeans(g);
+    const few = Math.max(2, 0.12 * g.length);
+    if (c && (c.nl < few || c.nh < few) && g.length >= 8) {          // drop a handful of stray gaps and retry
+      const cut = Math.sqrt(c.lo * c.hi);
+      g = g.filter(x => (c.nl < few ? x >= cut : x < cut));
+      c = twoMeans(g);
+      if (c && (c.nl < 2 || c.nh < 2)) c = null;
+    }
+    if (c && c.hi / c.lo > 1.7) this.wordGap = Math.max(4 * u, Math.sqrt(c.lo * c.hi));
+    else {
+      const s = g.slice().sort((a, b) => a - b), med = s[s.length >> 1];
+      this.wordGap = med > 6 * u ? 1.6 * med : 5 * u;   // all character gaps (Farnsworth) or all normal
+    }
+  }
+}
+</script>
+<script>
+{
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('cwd.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('cwd.' + k, JSON.stringify(v)); } catch (e) {} }
+};
+const S = {
+  tone: store.get('tone', 650), auto: store.get('auto', true), bw: store.get('bw', 60), sq: store.get('sq', 9),
+  wpm: store.get('wpm', 0), size: store.get('size', 30), src: store.get('src', 'mic'), dev: store.get('dev', '')
+};
+const FMIN = 250, FMAX = 1350;
+const DSP_SRC = $('#dsp').textContent;
+const els = { wpm: $('#wpm'), tone: $('#tone'), snr: $('#snr'), led: $('#led'), out: $('#out'), status: $('#status'), go: $('#go'), lvl: $('#lvl'), lvlTxt: $('#lvlTxt') };
+
+let ctx = null, an = null, proc = null, sink = null, src = null, stream = null, setEnv = () => {}, running = false, wake = null;
+let raf = 0, lastDraw = 0, lastKeyAt = 0, spec = null, hold = null, tbuf = null;
+
+const dec = new CWDecoder({
+  squelch: S.sq, fixedWpm: S.wpm,
+  onChar: addChar,
+  onKey: k => { els.led.classList.toggle('on', k); if (k) lastKeyAt = performance.now(); }
+});
+
+function status(html) { els.status.innerHTML = html; }
+function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('show'), 1800); }
+
+/* ---------- decoded text ---------- */
+let lines = store.get('lines', []);       // [[timeLabel, text], ...]
+let cur = null, lastCharAt = 0, saveT = 0;
+const fmtTime = d => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+function lineEl(t, x) {
+  const d = document.createElement('div'); d.className = 'ln';
+  const tm = document.createElement('time'); tm.textContent = t;
+  const sp = document.createElement('span'); sp.className = 'x'; sp.textContent = x;
+  d.append(tm, sp); return d;
+}
+function renderSaved() {
+  if (!lines.length) return;
+  $('#empty').remove();
+  for (const [t, x] of lines) els.out.appendChild(lineEl(t, x));
+  els.out.scrollTop = els.out.scrollHeight;
+}
+function newLine() {
+  const e = $('#empty'); if (e) e.remove();
+  const t = fmtTime(new Date());
+  lines.push([t, '']);
+  if (lines.length > 300) { lines.shift(); if (els.out.firstElementChild) els.out.firstElementChild.remove(); }
+  cur = lineEl(t, '').querySelector('.x');
+  els.out.appendChild(cur.parentNode);
+}
+function addChar(c) {
+  const now = Date.now();
+  const atBottom = els.out.scrollHeight - els.out.scrollTop - els.out.clientHeight < 60;
+  if (!cur || (c !== ' ' && now - lastCharAt > 8000) || cur.textContent.length > 1500) {
+    if (c === ' ') return;
+    newLine();
+  }
+  if (c === ' ' && (!cur.textContent || cur.textContent.endsWith(' '))) return;
+  cur.textContent += c;
+  lines[lines.length - 1][1] = cur.textContent;
+  lastCharAt = now;
+  if (atBottom) els.out.scrollTop = els.out.scrollHeight;
+  if (!saveT) saveT = setTimeout(() => { saveT = 0; store.set('lines', lines); }, 3000);
+}
+addEventListener('pagehide', () => store.set('lines', lines));
+
+/* ---------- audio ---------- */
+async function makeProc() {
+  try {
+    if (!ctx.audioWorklet || !window.AudioWorkletNode) throw new Error('no worklet');
+    const code = DSP_SRC + `
+class P extends AudioWorkletProcessor {
+  constructor(o) { super(); this.e = new CWEnvelope(sampleRate, o.processorOptions); this.b = [];
+    this.port.onmessage = m => { const d = m.data; if (d.tone) this.e.setTone(d.tone); if (d.bw) this.e.setBandwidth(d.bw); }; }
+  process(i) { const c = i[0] && i[0][0]; if (c) { this.e.process(c, v => this.b.push(v));
+    if (this.b.length >= 4) { this.port.postMessage(this.b); this.b = []; } } return true; }
+}
+registerProcessor('cw-env', P);`;
+    const url = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
+    await ctx.audioWorklet.addModule(url);
+    proc = new AudioWorkletNode(ctx, 'cw-env', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { tone: S.tone, bw: S.bw } });
+    proc.port.onmessage = e => { for (const v of e.data) dec.push(v); };
+    setEnv = m => proc.port.postMessage(m);
+  } catch (err) {
+    const Env = new Function(DSP_SRC + '; return CWEnvelope;')();
+    const env = new Env(ctx.sampleRate, { tone: S.tone, bw: S.bw });
+    proc = ctx.createScriptProcessor(2048, 1, 1);
+    proc.onaudioprocess = ev => env.process(ev.inputBuffer.getChannelData(0), v => dec.push(v));
+    setEnv = m => { if (m.tone) env.setTone(m.tone); if (m.bw) env.setBandwidth(m.bw); };
+  }
+}
+
+function testBuffer(rate) {
+  // A practice signal: 20 WPM at 650 Hz in light noise, about a minute long, looping.
+  const T = { A: '.-', B: '-...', C: '-.-.', D: '-..', E: '.', F: '..-.', G: '--.', H: '....', I: '..', J: '.---', K: '-.-', L: '.-..', M: '--', N: '-.', O: '---', P: '.--.', Q: '--.-', R: '.-.', S: '...', T: '-', U: '..-', V: '...-', W: '.--', X: '-..-', Y: '-.--', Z: '--..', 0: '-----', 1: '.----', 2: '..---', 3: '...--', 4: '....-', 5: '.....', 6: '-....', 7: '--...', 8: '---..', 9: '----.', '=': '-...-', '?': '..--..', '/': '-..-.' };
+  const text = 'CQ CQ CQ DE N0CALL N0CALL K = THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG = 73 ES GL DE N0CALL';
+  const u = 1200 / 20, segs = [[0, 800]];
+  text.split(' ').forEach((w, wi, ws) => {
+    [...w].forEach((ch, ci) => {
+      [...T[ch]].forEach((e, ei, a) => { segs.push([1, e === '.' ? u : 3 * u]); if (ei < a.length - 1) segs.push([0, u]); });
+      if (ci < w.length - 1) segs.push([0, 3 * u]);
+    });
+    segs.push([0, wi < ws.length - 1 ? 7 * u : 2500]);
+  });
+  const total = segs.reduce((a, s) => a + s[1], 0), n = Math.ceil(total / 1000 * rate);
+  const buf = ctx.createBuffer(1, n, rate), x = buf.getChannelData(0);
+  let seed = 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const w = 2 * Math.PI * 650 / rate, rise = 0.005 * rate; let i = 0, env = 0;
+  for (const [on, ms] of segs) {
+    const m = Math.round(ms / 1000 * rate);
+    for (let k = 0; k < m && i < n; k++, i++) {
+      env = Math.max(0, Math.min(1, env + (on ? 1 : -1) / rise));
+      x[i] = 0.08 * (0.5 - 0.5 * Math.cos(Math.PI * env)) * Math.sin(w * i) + 0.06 * (rnd() + rnd() + rnd() - 1.5);
+    }
+  }
+  return buf;
+}
+
+async function start() {
+  if (running) return;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  ctx = new Ctx();
+  const resumed = ctx.resume();
+  els.go.disabled = true; status('Starting&hellip;');
+  try {
+    await resumed;
+    an = ctx.createAnalyser(); an.fftSize = 8192; an.smoothingTimeConstant = 0;
+    sink = ctx.createGain(); sink.gain.value = 0; sink.connect(ctx.destination);
+    await makeProc();
+    if (S.src === 'test') {
+      src = ctx.createBufferSource(); src.buffer = testBuffer(ctx.sampleRate); src.loop = true; src.start();
+    } else {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error('nomic'), { name: 'NoMic' });
+      const c = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: S.dev ? Object.assign({ deviceId: { exact: S.dev } }, c) : c }); }
+      catch (e) { if (S.dev && e.name === 'OverconstrainedError') { S.dev = ''; store.set('dev', ''); stream = await navigator.mediaDevices.getUserMedia({ audio: c }); } else throw e; }
+      stream.getAudioTracks().forEach(t => t.addEventListener('ended', interrupted));
+      src = ctx.createMediaStreamSource(stream);
+      listDevices();
+    }
+    src.connect(an); src.connect(proc); proc.connect(sink);
+    spec = new Float32Array(an.frequencyBinCount); hold = new Float32Array(an.frequencyBinCount).fill(-200); tbuf = new Float32Array(an.fftSize);
+    ctx.onstatechange = () => { if (running && ctx && ctx.state !== 'running') interrupted(); };
+    dec.reset(); setTone(S.tone, true); setEnv({ bw: S.bw });
+    running = true;
+    els.go.textContent = 'Stop'; els.go.classList.add('live');
+    await keepAwake();
+    showListening();
+    raf = requestAnimationFrame(frame);
+  } catch (err) {
+    let e = err;
+    stop();
+    const why = {
+      NotAllowedError: 'Microphone access was declined. In Safari tap <b>aA</b>, then <b>Website Settings</b>, set Microphone to <b>Allow</b>, and try again.',
+      NoMic: 'This page cannot reach a microphone here. Open it directly in Safari at <b>rberg1869-commits.github.io/cw-decoder</b>, or choose <b>Test</b>.',
+      NotFoundError: 'No microphone or audio input was found.'
+    };
+    if (S.src === 'mic' && window.top !== window.self && e.name === 'NotAllowedError') e = { name: 'NoMic' };
+    const esc = t => String(t).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
+    status(why[e.name] || ('Could not start audio: ' + esc(e.message || e.name)));
+  } finally { els.go.disabled = false; }
+}
+
+function stop() {
+  running = false; cancelAnimationFrame(raf);
+  try { if (src && src.stop) src.stop(); } catch (e) {}
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  if (ctx) ctx.close().catch(() => {});
+  ctx = an = proc = sink = src = stream = null;
+  if (wake) wake.release().catch(() => {}); wake = null;
+  els.go.textContent = 'Start listening'; els.go.classList.remove('live');
+  els.led.classList.remove('on'); els.lvl.style.width = '0'; els.lvlTxt.textContent = 'off';
+  els.wpm.textContent = '--'; els.snr.textContent = '--'; els.wpm.classList.add('dim'); els.snr.classList.add('dim');
+  status('Stopped. Tap <b>Start listening</b> to begin again.');
+}
+
+function interrupted() { if (running) { $('#resume').classList.add('show'); status('The iPad paused the audio. Tap to resume.'); } }
+async function resumeAll() { $('#resume').classList.remove('show'); stop(); await start(); }
+
+async function keepAwake() {
+  try { if ('wakeLock' in navigator) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (e) { wake = null; }
+  $('#wakeNote').textContent = wake ? 'The screen is being kept on while this page is listening.'
+    : 'This iPad did not allow the page to keep the screen on. Set Settings, Display & Brightness, Auto-Lock to Never while you listen.';
+}
+function showListening() {
+  const what = S.src === 'test' ? 'the practice signal' : 'the microphone';
+  status(`Listening to <b>${what}</b>.` + (wake ? ' Screen stays on.' : ' Set Auto-Lock to Never so the screen stays on.'));
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') store.set('lines', lines);
+  if (document.visibilityState === 'visible' && running) {
+    if (!wake) keepAwake();
+    if (ctx && ctx.state !== 'running') ctx.resume().then(() => $('#resume').classList.remove('show')).catch(interrupted);
+  }
+});
+
+async function listDevices() {
+  try {
+    const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput');
+    const sel = $('#dev'); sel.textContent = '';
+    const o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'Default input'; sel.appendChild(o0);
+    ds.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('Input ' + (i + 1)); sel.appendChild(o); });
+    sel.value = S.dev;
+  } catch (e) {}
+}
+
+/* ---------- waterfall, auto tone, readouts ---------- */
+const cv = $('#wf'), g2 = cv.getContext('2d');
+function sizeCanvas() {
+  const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+  cv.width = Math.max(1, Math.round(r.width * d)); cv.height = Math.max(1, Math.round(r.height * d));
+  g2.fillStyle = '#000'; g2.fillRect(0, 0, cv.width, cv.height);
+  const sc = $('#scale'); sc.textContent = '';
+  for (let f = 300; f <= 1300; f += 200) { const s = document.createElement('span'); s.style.left = ((f - FMIN) / (FMAX - FMIN) * 100) + '%'; s.textContent = f; sc.appendChild(s); }
+  placeBand();
+}
+const ro = new ResizeObserver(sizeCanvas); ro.observe(cv);
+function placeBand() {
+  const b = $('#band'), w = Math.max(S.bw, 30);
+  b.style.left = ((S.tone - w / 2 - FMIN) / (FMAX - FMIN) * 100) + '%';
+  b.style.width = (w / (FMAX - FMIN) * 100) + '%';
+}
+function binOf(f) { return f * an.fftSize / ctx.sampleRate; }
+
+function frame(t) {
+  raf = requestAnimationFrame(frame);
+  if (!an || t - lastDraw < 60) return;
+  lastDraw = t;
+  an.getFloatFrequencyData(spec);
+  const b0 = Math.floor(binOf(FMIN)), b1 = Math.ceil(binOf(FMAX));
+  const band = Array.prototype.slice.call(spec, b0, b1).sort((a, b) => a - b);
+  const med = band[band.length >> 1];
+  // draw one new row
+  const W = cv.width, rowH = Math.max(1, Math.round(window.devicePixelRatio || 1));
+  g2.drawImage(cv, 0, 0, W, cv.height - rowH, 0, rowH, W, cv.height - rowH);
+  const img = g2.createImageData(W, 1), px = img.data;
+  for (let x = 0; x < W; x++) {
+    const bin = binOf(FMIN + (FMAX - FMIN) * x / W), i = Math.floor(bin), fr = bin - i;
+    const db = spec[i] * (1 - fr) + spec[Math.min(i + 1, spec.length - 1)] * fr;
+    let v = Math.max(0, Math.min(1, (db - med - 3) / 36));
+    v = Math.pow(v, 0.8);
+    const c = Math.round(255 * v);
+    px[x * 4] = c; px[x * 4 + 1] = c; px[x * 4 + 2] = c; px[x * 4 + 3] = 255;
+  }
+  for (let r = 0; r < rowH; r++) g2.putImageData(img, 0, r);
+  // auto tone: strongest steady peak
+  let pk = -1, pv = -1e9;
+  const a0 = Math.floor(binOf(300)), a1 = Math.ceil(binOf(1200));
+  for (let i = b0; i <= b1; i++) hold[i] = Math.max(spec[i], hold[i] - 0.6);
+  for (let i = a0; i <= a1; i++) if (hold[i] > pv) { pv = hold[i]; pk = i; }
+  if (S.auto && pk > 0 && pv - med > 14) {
+    const y0 = hold[pk - 1], y1 = hold[pk], y2 = hold[pk + 1], den = y0 - 2 * y1 + y2;
+    const f = (pk + (den ? 0.5 * (y0 - y2) / den : 0)) * ctx.sampleRate / an.fftSize;
+    const idle = performance.now() - lastKeyAt > 2500;
+    if (idle && Math.abs(f - S.tone) > 12) setTone(f);
+    else if (Math.abs(f - S.tone) < 40 && Math.abs(f - S.tone) > 2) setTone(S.tone + 0.2 * (f - S.tone));
+  }
+  // input level
+  an.getFloatTimeDomainData(tbuf);
+  let ss = 0; for (let i = 0; i < tbuf.length; i++) ss += tbuf[i] * tbuf[i];
+  const dbfs = 10 * Math.log10(ss / tbuf.length + 1e-12);
+  els.lvl.style.width = Math.max(0, Math.min(100, (dbfs + 80) / 70 * 100)) + '%';
+  els.lvlTxt.textContent = dbfs < -75 ? 'silent' : Math.round(dbfs) + ' dB';
+  // readouts
+  const open = dec.open;
+  els.wpm.textContent = open || S.wpm ? Math.round(S.wpm || dec.wpm) : '--';
+  els.snr.textContent = open ? Math.max(0, Math.round(dec.markLevel - 5.5)) : '--';
+  els.wpm.classList.toggle('dim', !open); els.snr.classList.toggle('dim', !open);
+}
+
+function setTone(f, force) {
+  f = Math.round(Math.max(300, Math.min(1300, f)));
+  if (!force && f === S.tone) return;
+  S.tone = f; els.tone.textContent = f; placeBand(); setEnv({ tone: f });
+  clearTimeout(setTone.t); setTone.t = setTimeout(() => store.set('tone', S.tone), 1000);
+}
+function setAuto(on) { S.auto = on; store.set('auto', on); $('#tAuto').setAttribute('aria-pressed', on); }
+
+$('#fall').addEventListener('pointerdown', e => {
+  const r = e.currentTarget.getBoundingClientRect();
+  let f = FMIN + (FMAX - FMIN) * (e.clientX - r.left) / r.width;
+  if (hold && an) {             // snap to the strongest signal within 30 Hz of the tap
+    let best = f, bv = -1e9;
+    for (let i = Math.floor(binOf(f - 30)); i <= Math.ceil(binOf(f + 30)); i++) if (hold[i] > bv) { bv = hold[i]; best = i * ctx.sampleRate / an.fftSize; }
+    f = best;
+  }
+  setAuto(false); setTone(f); dec.reset(); toast('Tuned to ' + Math.round(f) + ' Hz. Tone locked.');
+});
+
+/* ---------- controls ---------- */
+els.go.addEventListener('click', () => (running ? stop() : start()));
+$('#resumeBtn').addEventListener('click', resumeAll);
+function setSrc(s) {
+  S.src = s; store.set('src', s);
+  $('#srcMic').setAttribute('aria-pressed', s === 'mic'); $('#srcTest').setAttribute('aria-pressed', s === 'test');
+  if (running) { stop(); start(); }
+}
+$('#srcMic').addEventListener('click', () => setSrc('mic'));
+$('#srcTest').addEventListener('click', () => setSrc('test'));
+$('#tAuto').addEventListener('click', () => setAuto(!S.auto));
+$('#tDn').addEventListener('click', () => { setAuto(false); setTone(S.tone - 10); });
+$('#tUp').addEventListener('click', () => { setAuto(false); setTone(S.tone + 10); });
+document.querySelectorAll('[data-bw]').forEach(b => b.addEventListener('click', () => {
+  S.bw = +b.dataset.bw; store.set('bw', S.bw); setEnv({ bw: S.bw }); placeBand(); markBw();
+}));
+function markBw() { document.querySelectorAll('[data-bw]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.bw === S.bw)); }
+function setSize(px) { S.size = Math.max(16, Math.min(64, px)); store.set('size', S.size); document.documentElement.style.setProperty('--size', S.size + 'px'); }
+$('#aDn').addEventListener('click', () => setSize(S.size - 4));
+$('#aUp').addEventListener('click', () => setSize(S.size + 4));
+$('#copyBtn').addEventListener('click', async () => {
+  const txt = lines.map(l => l[0] + '  ' + l[1]).join('\n');
+  try { await navigator.clipboard.writeText(txt); toast('Copied ' + lines.length + ' lines'); } catch (e) { toast('Copy was blocked'); }
+});
+let clearArm = 0;
+$('#clearBtn').addEventListener('click', e => {
+  if (Date.now() - clearArm > 3000) { clearArm = Date.now(); e.currentTarget.textContent = 'Tap again'; setTimeout(() => { $('#clearBtn').textContent = 'Clear'; }, 3000); return; }
+  lines = []; cur = null; store.set('lines', []); els.out.textContent = ''; $('#clearBtn').textContent = 'Clear'; clearArm = 0;
+});
+const sq = $('#sq'), spd = $('#spd');
+function showSq() { $('#sqv').textContent = S.sq; }
+function showSpd() { $('#spdv').textContent = S.wpm ? 'locked at ' + S.wpm + ' WPM (slide to 0 for automatic)' : 'automatic'; }
+sq.value = S.sq; spd.value = S.wpm; showSq(); showSpd();
+sq.addEventListener('input', () => { S.sq = +sq.value; dec.squelch = S.sq; store.set('sq', S.sq); showSq(); });
+spd.addEventListener('input', () => { S.wpm = spd.value < 5 ? 0 : +spd.value; dec.setFixedWpm(S.wpm); store.set('wpm', S.wpm); showSpd(); });
+$('#dev').addEventListener('change', e => { S.dev = e.target.value; store.set('dev', S.dev); if (running && S.src === 'mic') { stop(); start(); } });
+
+setSize(S.size); markBw(); setAuto(S.auto); els.tone.textContent = S.tone;
+$('#srcMic').setAttribute('aria-pressed', S.src === 'mic'); $('#srcTest').setAttribute('aria-pressed', S.src === 'test');
+renderSaved();
+window.__cw = { dec, S, get lines() { return lines; } };
+}
+</script>
+</body>
+</html>
