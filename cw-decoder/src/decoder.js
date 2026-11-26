@@ -39,7 +39,7 @@ class CWDecoder {
   reset(wpm) {
     this.dit = this.fixedWpm ? 1200 / this.fixedWpm : 1200 / (wpm || 18);
     this.boundary = 2 * this.dit;
-    this.gapUnit = this.dit; this.wordGap = 0;
+    this.gapUnit = this.dit; this.wordGap = 0; this.showDit = 0;
     this.floor = null; this.peak = null; this.count = 0;
     this.state = false; this.cand = false; this.candRun = 0; this.runMs = 0;
     this.marks = []; this.gaps = []; this.longGaps = [];
@@ -52,7 +52,7 @@ class CWDecoder {
     this.fixedWpm = w || 0;
     if (w) { this.dit = 1200 / w; this.boundary = 2 * this.dit; this.gapUnit = this.dit; }
   }
-  get wpm() { return 1200 / this.dit; }
+  get wpm() { const d = !this.fixedWpm && this.showDit && Math.abs(this.showDit / this.dit - 1) < 0.35 ? this.showDit : this.dit; return 1200 / d; }
   get snr() { return this.open ? Math.max(0, this.markLevel) : 0; }
   get unit() { return 0.5 * (this.dit + this.gapUnit); }
 
@@ -77,6 +77,7 @@ class CWDecoder {
     const thr = this.floor + Math.max(4, (5.5 + ref) / 2, ref - 6);
     const hyst = Math.min(2, 0.1 * S);
     const want = this.state ? db > thr - hyst : db > thr;
+    this.lastDb = db; this.lastThr = thr;               // for the keying display
 
     const minRun = Math.min(40, Math.max(2 * fm, 0.25 * this.dit));
     if (want !== this.state) {
@@ -159,13 +160,23 @@ class CWDecoder {
 
   learn() {
     if (this.fixedWpm) return;
-    const m = this.marks;
+    let m = this.marks;
     const w = m.length < 10 ? 0.8 : 0.4;
-    const c = m.length >= 3 ? twoMeans(m) : null;
+    let c = m.length >= 3 ? twoMeans(m) : null;
+    if (c && m.length >= 8 && Math.min(c.nl, c.nh) <= Math.max(1, Math.floor(0.12 * m.length))) {
+      // one or two stray marks (a click, a noise blip, a burst of QRN) must not drag the speed estimate
+      const cut = Math.sqrt(c.lo * c.hi), dropLo = c.nl < c.nh;
+      m = m.filter(x => (dropLo ? x >= cut : x < cut));
+      c = twoMeans(m);
+    }
     if (c && c.hi / c.lo > 1.8 && c.hi / c.lo < 5) {
       const est = (c.nl * c.lo + c.nh * c.hi / 3) / (c.nl + c.nh);
       this.dit = (1 - w) * this.dit + w * est;
       this.boundary = Math.sqrt(c.lo * c.hi);
+      // For the speed readout: a dah is exactly two units longer than a dit, and that difference
+      // cancels the few milliseconds every keyed element gains from the receive filter.
+      const u2 = (c.hi - c.lo) / 2;
+      if (c.nl >= 2 && c.nh >= 2 && u2 > 0.6 * est && u2 < 1.4 * est) this.showDit = this.showDit ? 0.7 * this.showDit + 0.3 * u2 : u2;
     } else if (m.length) {
       const recent = m.slice(-4);
       const mean = Math.exp(recent.map(Math.log).reduce((a, b) => a + b, 0) / recent.length);
