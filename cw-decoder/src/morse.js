@@ -34,18 +34,24 @@ const MORSE_TX = (function () {
 
   function durationMs(text, wpm) { return units(text).reduce((a, s) => a + s[1], 0) * 1200 / wpm; }
 
-  // Render keyed tone into a Float32Array. opts: { wpm, tone, rate, level, rise (ms), lead (ms of extra first element) }
+  // Render keyed tone into a Float32Array.
+  // opts: { wpm, tone, rate, level, rise (ms), lead (ms of extra first element),
+  //         maxGap (ms): longest silence allowed between words, so radio VOX never drops out mid-message;
+  //                      never shorter than 5 units, so words stay apart }
   function render(text, opts) {
     const rate = opts.rate || 48000, wpm = opts.wpm || 20, tone = opts.tone || 700;
     const level = opts.level != null ? opts.level : 0.5, riseMs = opts.rise || 5;
     const u = 1200 / wpm / 1000, segs = units(text);
+    const gapCap = opts.maxGap ? Math.max(5 * u, opts.maxGap / 1000) : Infinity;
+    const secs = segs.map(([on, len]) => (!on && len === 7) ? Math.min(len * u, gapCap) : len * u);
     const pre = 0.02, post = 0.03;                                     // a little silence either side
-    const total = pre + post + segs.reduce((a, s) => a + s[1], 0) * u + (opts.lead || 0) / 1000;
+    const total = pre + post + secs.reduce((a, s) => a + s, 0) + (opts.lead || 0) / 1000;
     const n = Math.ceil(total * rate), x = new Float32Array(n);
     const w = 2 * Math.PI * tone / rate, rise = Math.max(1, Math.round(riseMs / 1000 * rate));
     let i = Math.round(pre * rate), first = true;
-    for (const [on, len] of segs) {
-      let m = Math.round(len * u * rate);
+    for (let si = 0; si < segs.length; si++) {
+      const on = segs[si][0];
+      let m = Math.round(secs[si] * rate);
       if (on && first && opts.lead) { m += Math.round(opts.lead / 1000 * rate); }
       if (on) {
         first = false;

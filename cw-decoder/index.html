@@ -295,7 +295,7 @@ details[open] summary::before{content:"\2212"}
           <h3>Hooked to the IC-746</h3>
           <ol>
             <li>Receive: rear <b>EXT SP</b> jack, 3.5 mm cable, Saramonic SR-C2003, iPad. AF knob low; raise it until Input reads -30 to -15 dB.</li>
-            <li>Transmit today (no interface): radio in <b>USB</b>, <b>VOX</b> on, COMP off, MIC GAIN low, VOX delay 0.3 s. Set the hand mic right against the iPad speaker grille. Keep the shack quiet while Auto runs; room sound goes out while the radio is keyed.</li>
+            <li>Transmit today (no interface): radio in <b>USB</b>, <b>VOX</b> on, COMP off, MIC GAIN low, VOX delay 0.5 s (the radio must stay keyed through the space between words; the app keeps those spaces shorter than this). Set the hand mic right against the iPad speaker grille. Keep the shack quiet while Auto runs; room sound goes out while the radio is keyed.</li>
             <li>Level test: tick Transmit and SWR, then Send a level test. Use the iPad volume and MIC GAIN so ALC barely moves. If a cough or voice keys the radio, lower VOX GAIN.</li>
             <li>Later, with a SignaLink on <b>ACC(1)</b>: choose SignaLink above; the mic and VOX are no longer needed.</li>
             <li>Check SWR on the radio after every band change; Auto will not transmit until you tick the box.</li>
@@ -1078,18 +1078,24 @@ const MORSE_TX = (function () {
 
   function durationMs(text, wpm) { return units(text).reduce((a, s) => a + s[1], 0) * 1200 / wpm; }
 
-  // Render keyed tone into a Float32Array. opts: { wpm, tone, rate, level, rise (ms), lead (ms of extra first element) }
+  // Render keyed tone into a Float32Array.
+  // opts: { wpm, tone, rate, level, rise (ms), lead (ms of extra first element),
+  //         maxGap (ms): longest silence allowed between words, so radio VOX never drops out mid-message;
+  //                      never shorter than 5 units, so words stay apart }
   function render(text, opts) {
     const rate = opts.rate || 48000, wpm = opts.wpm || 20, tone = opts.tone || 700;
     const level = opts.level != null ? opts.level : 0.5, riseMs = opts.rise || 5;
     const u = 1200 / wpm / 1000, segs = units(text);
+    const gapCap = opts.maxGap ? Math.max(5 * u, opts.maxGap / 1000) : Infinity;
+    const secs = segs.map(([on, len]) => (!on && len === 7) ? Math.min(len * u, gapCap) : len * u);
     const pre = 0.02, post = 0.03;                                     // a little silence either side
-    const total = pre + post + segs.reduce((a, s) => a + s[1], 0) * u + (opts.lead || 0) / 1000;
+    const total = pre + post + secs.reduce((a, s) => a + s, 0) + (opts.lead || 0) / 1000;
     const n = Math.ceil(total * rate), x = new Float32Array(n);
     const w = 2 * Math.PI * tone / rate, rise = Math.max(1, Math.round(riseMs / 1000 * rate));
     let i = Math.round(pre * rate), first = true;
-    for (const [on, len] of segs) {
-      let m = Math.round(len * u * rate);
+    for (let si = 0; si < segs.length; si++) {
+      const on = segs[si][0];
+      let m = Math.round(secs[si] * rate);
       if (on && first && opts.lead) { m += Math.round(opts.lead / 1000 * rate); }
       if (on) {
         first = false;
@@ -1278,7 +1284,7 @@ const S = {
   wpm: store.get('wpm', 0), size: store.get('size', 30), src: store.get('src', 'mic'), dev: store.get('dev', ''),
   my: Object.assign({ call: 'KD9RDU', name: 'BOB', qth: 'IL', zone: 4, wpm: 22, maxWpm: 32 }, store.get('my', {})),
   style: store.get('style', 'contest'), band: store.get('band', '20m'), dial: store.get('dial', {}), txLevel: store.get('txLevel', 40),
-  askFirst: store.get('askFirst', false), txPath: store.get('txPath', 'vox'), voxDelay: store.get('voxDelay', 0.3), lead: store.get('lead', 40), needTwice: store.get('needTwice', true), qrzKey: store.get('qrzKey', ''), autoOpen: store.get('autoOpen', false)
+  askFirst: store.get('askFirst', false), txPath: store.get('txPath', 'vox'), voxDelay: store.get('voxDelay', 0.5), lead: store.get('lead', 40), needTwice: store.get('needTwice', true), qrzKey: store.get('qrzKey', ''), autoOpen: store.get('autoOpen', false)
 };
 if (S.src !== 'mic' && S.src !== 'practice') S.src = 'mic';
 const BANDS = ['40m', '20m', '17m', '15m', '12m', '10m', '6m'];                      // the bands Bob allows for automation
@@ -1499,7 +1505,9 @@ function pinCq(tone) {
 
 /* transmit: a keyed tone; Practice keeps it inside the page */
 async function transmit(text, o) {
-  const wpm = o.wpm, tone = o.tone, dur = MORSE_TX.durationMs(text, wpm) + 60;
+  // VOX path: the 5-unit word space must fit inside the radio's VOX delay (with 0.1 s to spare), so never send slower than that allows
+  const vmin = (S.src !== 'practice' && S.txPath === 'vox') ? Math.ceil(6000 / Math.max(200, S.voxDelay * 1000 - 100)) : 0;
+  const wpm = Math.max(o.wpm, vmin), tone = o.tone, dur = MORSE_TX.durationMs(text, wpm) + 60;
   txActive = true; setOnAir(true);
   for (const c of chans.values()) c.clear();
   try {
@@ -1510,7 +1518,7 @@ async function transmit(text, o) {
     } else {
       if (!ctx || ctx.state !== 'running') throw new Error('audio stopped');
       const vox = S.txPath === 'vox';
-      const x = MORSE_TX.render(text, { wpm, tone, rate: ctx.sampleRate, level: Math.min(1, S.txLevel / 100), lead: vox ? S.lead : 12 });
+      const x = MORSE_TX.render(text, { wpm, tone, rate: ctx.sampleRate, level: Math.min(1, S.txLevel / 100), lead: vox ? S.lead : 12, maxGap: vox ? S.voxDelay * 1000 - 100 : 0 });
       const buf = ctx.createBuffer(1, x.length, ctx.sampleRate); buf.getChannelData(0).set(x);
       const n = ctx.createBufferSource(); n.buffer = buf; n.connect(ctx.destination); txSrcNode = n;
       await new Promise(res => { txResolve = res; n.onended = res; n.start(ctx.currentTime + 0.03); setTimeout(res, x.length / ctx.sampleRate * 1000 + 1500); });
@@ -1964,7 +1972,7 @@ document.querySelectorAll('#pathSeg button').forEach(b => b.addEventListener('cl
 markPath();
 const vd = $('#voxDelay'), li = $('#leadIn');
 vd.value = S.voxDelay; li.value = S.lead;
-vd.addEventListener('change', () => { S.voxDelay = Math.max(0.1, Math.min(1.5, parseFloat(vd.value) || 0.3)); vd.value = S.voxDelay; store.set('voxDelay', S.voxDelay); });
+vd.addEventListener('change', () => { S.voxDelay = Math.max(0.1, Math.min(1.5, parseFloat(vd.value) || 0.5)); vd.value = S.voxDelay; store.set('voxDelay', S.voxDelay); });
 li.addEventListener('change', () => { S.lead = Math.max(0, Math.min(120, parseInt(li.value, 10) || 40)); li.value = S.lead; store.set('lead', S.lead); });
 const af = $('#askFirst'), nt = $('#needTwice'), qk = $('#qrzKey');
 af.checked = S.askFirst; nt.checked = S.needTwice; qk.value = S.qrzKey;
