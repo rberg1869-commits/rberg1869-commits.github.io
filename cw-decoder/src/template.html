@@ -226,11 +226,11 @@ details[open] summary::before{content:"\2212"}
       <div class="empty" id="empty">
         <h2>Decoded CW shows up here in large type</h2>
         <ol>
-          <li>Connect the radio audio to the iPad (Saramonic cable from the rear <b>EXT SP</b> jack, or the SignaLink on the rear <b>ACC(1)</b> socket).</li>
+          <li>Connect the radio audio to the iPad: 3.5 mm cable from the IC-746 rear <b>EXT SP</b> jack into the Saramonic, Saramonic into the iPad. Turn the AF knob low first.</li>
           <li>Tune in a CW signal, then tap <b>Start listening</b> and allow the microphone.</li>
           <li>Set the level so the <b>Input</b> meter reads about -30 to -15 dB. Tone tracks the signal by itself, or tap a signal on the waterfall.</li>
         </ol>
-        <p>Tap <b>Auto QSO</b> for automatic contacts. No radio handy? Choose <b>Practice</b> for a make-believe band that answers back.</p>
+        <p>Tap <b>Auto QSO</b> for automatic contacts (radio in USB; see Settings for the VOX hookup). No radio handy? Choose <b>Practice</b> for a make-believe band that answers back.</p>
       </div>
     </main>
     <main class="copy" id="tr" aria-label="QSO transcript" hidden></main>
@@ -275,6 +275,10 @@ details[open] summary::before{content:"\2212"}
             <div><label for="myQth">QTH</label><input type="text" id="myQth" autocapitalize="characters" autocomplete="off" spellcheck="false"></div></div>
           <div class="two"><div><label for="maxWpm">Top send speed</label><input type="number" id="maxWpm" min="10" max="40"></div>
             <div><label for="cqWpm">CQ speed</label><input type="number" id="cqWpm" min="10" max="40"></div></div>
+          <label>Transmit through</label>
+          <div class="seg" id="pathSeg" style="margin-bottom:6px"><button data-path="vox">iPad speaker to radio mic (VOX)</button><button data-path="iface">SignaLink</button></div>
+          <div class="two"><div><label for="voxDelay">Radio VOX delay (s)</label><input type="number" id="voxDelay" min="0.1" max="1.5" step="0.1"></div>
+            <div><label for="leadIn">Lead-in (ms)</label><input type="number" id="leadIn" min="0" max="120" step="5"></div></div>
           <label for="txLvl">Transmit audio level: <span id="txLv"></span></label>
           <input type="range" id="txLvl" min="5" max="100" step="5">
           <button class="btn" id="vvvBtn">Send a level test (VVV DE call)</button>
@@ -288,11 +292,12 @@ details[open] summary::before{content:"\2212"}
           <p>Each contact made on the air goes to your QRZ logbook; your logbook sync copies it to the others. Practice contacts are never sent.</p>
         </div>
         <div>
-          <h3>Wired to the IC-746</h3>
+          <h3>Hooked to the IC-746</h3>
           <ol>
-            <li>Receive only: rear <b>EXT SP</b> jack, 3.5 mm cable, Saramonic SR-C2003, iPad.</li>
-            <li>Receive and transmit: SignaLink USB (SLUSB8PD) on the rear <b>ACC(1)</b> socket, USB to the iPad. Radio in <b>USB</b> mode for Auto QSO.</li>
-            <li>Set the SignaLink TX knob so ALC barely moves on the level test. Keep the iPad volume where you set it.</li>
+            <li>Receive: rear <b>EXT SP</b> jack, 3.5 mm cable, Saramonic SR-C2003, iPad. AF knob low; raise it until Input reads -30 to -15 dB.</li>
+            <li>Transmit today (no interface): radio in <b>USB</b>, <b>VOX</b> on, COMP off, MIC GAIN low, VOX delay 0.3 s. Set the hand mic right against the iPad speaker grille. Keep the shack quiet while Auto runs; room sound goes out while the radio is keyed.</li>
+            <li>Level test: tick Transmit and SWR, then Send a level test. Use the iPad volume and MIC GAIN so ALC barely moves. If a cough or voice keys the radio, lower VOX GAIN.</li>
+            <li>Later, with a SignaLink on <b>ACC(1)</b>: choose SignaLink above; the mic and VOX are no longer needed.</li>
             <li>Check SWR on the radio after every band change; Auto will not transmit until you tick the box.</li>
           </ol>
         </div>
@@ -330,7 +335,7 @@ const S = {
   wpm: store.get('wpm', 0), size: store.get('size', 30), src: store.get('src', 'mic'), dev: store.get('dev', ''),
   my: Object.assign({ call: 'KD9RDU', name: 'BOB', qth: 'IL', zone: 4, wpm: 22, maxWpm: 32 }, store.get('my', {})),
   style: store.get('style', 'contest'), band: store.get('band', '20m'), dial: store.get('dial', {}), txLevel: store.get('txLevel', 40),
-  askFirst: store.get('askFirst', false), needTwice: store.get('needTwice', true), qrzKey: store.get('qrzKey', ''), autoOpen: store.get('autoOpen', false)
+  askFirst: store.get('askFirst', false), txPath: store.get('txPath', 'vox'), voxDelay: store.get('voxDelay', 0.3), lead: store.get('lead', 40), needTwice: store.get('needTwice', true), qrzKey: store.get('qrzKey', ''), autoOpen: store.get('autoOpen', false)
 };
 if (S.src !== 'mic' && S.src !== 'practice') S.src = 'mic';
 const BANDS = ['40m', '20m', '17m', '15m', '12m', '10m', '6m'];                      // the bands Bob allows for automation
@@ -561,10 +566,13 @@ async function transmit(text, o) {
       if (sim && autoMode !== 'off') sim.hearUs(text, tone);
     } else {
       if (!ctx || ctx.state !== 'running') throw new Error('audio stopped');
-      const x = MORSE_TX.render(text, { wpm, tone, rate: ctx.sampleRate, level: Math.min(1, S.txLevel / 100), lead: 12 });
+      const vox = S.txPath === 'vox';
+      const x = MORSE_TX.render(text, { wpm, tone, rate: ctx.sampleRate, level: Math.min(1, S.txLevel / 100), lead: vox ? S.lead : 12 });
       const buf = ctx.createBuffer(1, x.length, ctx.sampleRate); buf.getChannelData(0).set(x);
       const n = ctx.createBufferSource(); n.buffer = buf; n.connect(ctx.destination); txSrcNode = n;
       await new Promise(res => { txResolve = res; n.onended = res; n.start(ctx.currentTime + 0.03); setTimeout(res, x.length / ctx.sampleRate * 1000 + 1500); });
+      // with VOX the radio stays on the air for its VOX delay after the tone stops; wait it out before listening
+      if (vox && txSrcNode) await new Promise(res => { txResolve = res; setTimeout(res, S.voxDelay * 1000); });
     }
   } finally {
     txSrcNode = null; txResolve = null; txActive = false; txEndAt = Date.now(); setOnAir(false);
@@ -1008,6 +1016,13 @@ $('#vvvBtn').addEventListener('click', async () => {
   trAdd('tx', `${S.my.call} level test`, `VVV VVV DE ${S.my.call}`);
   await transmit(`VVV VVV DE ${S.my.call}`, { wpm: 20, tone: S.tone });
 });
+function markPath() { document.querySelectorAll('#pathSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.path === S.txPath)); }
+document.querySelectorAll('#pathSeg button').forEach(b => b.addEventListener('click', () => { S.txPath = b.dataset.path; store.set('txPath', S.txPath); markPath(); }));
+markPath();
+const vd = $('#voxDelay'), li = $('#leadIn');
+vd.value = S.voxDelay; li.value = S.lead;
+vd.addEventListener('change', () => { S.voxDelay = Math.max(0.1, Math.min(1.5, parseFloat(vd.value) || 0.3)); vd.value = S.voxDelay; store.set('voxDelay', S.voxDelay); });
+li.addEventListener('change', () => { S.lead = Math.max(0, Math.min(120, parseInt(li.value, 10) || 40)); li.value = S.lead; store.set('lead', S.lead); });
 const af = $('#askFirst'), nt = $('#needTwice'), qk = $('#qrzKey');
 af.checked = S.askFirst; nt.checked = S.needTwice; qk.value = S.qrzKey;
 af.addEventListener('change', () => { S.askFirst = eng.askFirst = af.checked; store.set('askFirst', S.askFirst); });
@@ -1051,6 +1066,7 @@ $('#swrOk').addEventListener('change', e => { swrOk[S.band] = e.target.checked; 
 $('#dial').addEventListener('change', e => { const v = e.target.value.replace(/[^0-9.]/g, ''); if (v) S.dial[S.band] = v; else delete S.dial[S.band]; store.set('dial', S.dial); markBand(); setStat(eng.statusText || ''); });
 $('#txOn').addEventListener('change', e => {
   txOn = e.target.checked;
+  if (txOn && S.src !== 'practice') trAdd('ev', '', S.txPath === 'vox' ? 'Transmit on. Radio in USB with VOX on, hand mic against the iPad speaker, shack quiet.' : 'Transmit on. Radio in USB, SignaLink connected.');
   if (!txOn) stopTx();
   markBand(); setStat(eng.statusText || '');
 });

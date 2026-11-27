@@ -32,6 +32,8 @@ const QSO = (function () {
     r.calls = Object.keys(counts).filter(c => c !== my); r.counts = counts;
     r.isCQ = tk.includes('CQ') || tk.includes('TEST') || tk.includes('QRZ') || tk.includes('QRZ?');
     r.myExact = tk.includes(my);
+    // our call with its first letters cut off at the very start (the radio was still switching back to receive)
+    r.mySuffix = !r.myExact && tk.length > 0 && tk[0].length >= 3 && tk[0] !== my && my.endsWith(tk[0]);
     r.myFuzzy = !r.myExact && tk.some(t => { const p = t.replace(/\?/g, ''); return p.length >= 4 && p !== target && p !== my && lev(p, my) <= 1; });
     r.partial = tk.some(t => {
       if (!t.includes('?')) return false;
@@ -199,14 +201,14 @@ const QSO = (function () {
     }
     onCalling(r, info) {
       const t = this.t, my = this.my.call, z = this.my.zone;
-      if (r.myExact || r.myFuzzy || r.partial) {
+      if (r.myExact || r.mySuffix || r.myFuzzy || r.partial) {
         if (this.style === 'contest') {
-          if ((r.rst || r.zone) && (r.myExact || r.myFuzzy)) {
+          if ((r.rst || r.zone) && (r.myExact || r.mySuffix || r.myFuzzy)) {
             if (!r.zone && !t.askedNr) { t.askedNr = true; t.rxRst = r.rst; this.status(`Zone from ${t.call} not copied; asking again`); return this.tx('NR?', t, t.ch); }
             t.rx = { rst: r.rst || t.rxRst || '599', zone: r.zone || '' };
             t.exchTries = 1; this.state = 'exch';
             this.status(`${t.call} came back; sending the exchange`);
-            return this.tx(r.myExact ? `5NN ${z}` : `${my} ${my} 5NN ${z}`, t, t.ch);
+            return this.tx(r.myExact || r.mySuffix ? `5NN ${z}` : `${my} ${my} 5NN ${z}`, t, t.ch);
           }
           return this.callTarget(t, true);                          // "KD9?" or our call without exchange: repeat it
         }
