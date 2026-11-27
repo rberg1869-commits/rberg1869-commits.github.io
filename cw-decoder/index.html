@@ -17,10 +17,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* VOICE: a station instrument, the kind of panel that sits beside the rig all evening.
-   IDEA: an SDR receiver display (spectrum, waterfall, keying trace) feeding a teleprinter.
-   PICTURE: the colour waterfall with its tuning band, and the copy in large glowing type.
-   COLOUR and TYPE: deep navy black, SDR palette in the scope, cyan accent, green key lamp; Oxanium and JetBrains Mono.
-   LAYOUT: header, four readout cards, scope stack, copy fills the rest, control strip at the bottom. */
+   IDEA: an SDR receiver display (spectrum, waterfall, keying trace) feeding a teleprinter, plus an operator console for automatic QSOs.
+   PICTURE: the colour waterfall with every copied signal tagged by call, and the QSO transcript in large type.
+   COLOUR and TYPE: deep navy black, SDR palette in the scope, cyan accent, green key lamp, red only for on-air and stop; Oxanium and JetBrains Mono.
+   LAYOUT: header, four readout cards, scope stack, copy or transcript with the auto console beside it, control strip at the bottom. */
 :root{--bg:#0a0d12;--panel:#11161e;--panel2:#0c1118;--line:#1e2835;--ink:#e7eef7;--dim:#7f8da0;--cyan:#33c9ff;--green:#39e07a;--amber:#ffc23a;--red:#ff4d5e;color-scheme:dark}
 *{box-sizing:border-box;min-width:0}
 html,body{height:100%}
@@ -39,7 +39,10 @@ h1{margin:0;font-size:22px;font-weight:700;letter-spacing:.02em;line-height:1}
 .dot{width:9px;height:9px;border-radius:50%;background:#3a4656;flex:none}
 .live .dot{background:var(--green);box-shadow:0 0 10px var(--green)}
 .spacer{flex:1}
-button,select{font:inherit;font-size:15px;color:var(--ink);background:transparent;border:0;border-radius:9px;min-height:44px;padding:0 14px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.hin{display:flex;align-items:center;gap:8px}
+button,select,input{font:inherit;font-size:15px;color:var(--ink)}
+button,select{background:transparent;border:0;border-radius:9px;min-height:44px;padding:0 14px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:disabled{opacity:.45;cursor:default}
 button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 .go{background:linear-gradient(180deg,#45d4ff,#1586d6);color:#03101b;font-weight:700;min-width:170px;font-size:16px;box-shadow:0 6px 22px rgba(36,160,230,.35),inset 0 1px 0 rgba(255,255,255,.35)}
 .go.live{background:linear-gradient(180deg,#ff6b78,#d42f43);color:#fff;box-shadow:0 6px 22px rgba(220,50,70,.35),inset 0 1px 0 rgba(255,255,255,.3)}
@@ -57,8 +60,10 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .keycard{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
 .lamp{width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#2b4a37,#0f2016);border:1px solid #245236;transition:background .03s,box-shadow .03s}
 .lamp.on{background:radial-gradient(circle at 35% 30%,#b9ffd2,#39e07a 55%,#1a9c4c);box-shadow:0 0 22px rgba(57,224,122,.85)}
+.lamp.tx{background:radial-gradient(circle at 35% 30%,#ffd0d5,#ff4d5e 55%,#b0182c);border-color:#7a1f2b;box-shadow:0 0 24px rgba(255,77,94,.9)}
 .sq{font-size:12px;color:var(--dim)}
 .sq.open{color:var(--green)}
+.sq.tx{color:var(--red);font-weight:700}
 .scope{border-radius:12px;border:1px solid var(--line);background:#03070d;overflow:hidden;display:grid;grid-template-rows:clamp(54px,9vh,92px) 18px clamp(84px,15vh,168px) 46px;position:relative;touch-action:none}
 .scope canvas{width:100%;height:100%;display:block}
 .cv{position:relative;min-height:0}
@@ -68,26 +73,86 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .scale{position:relative;background:#070c14;border-top:1px solid #121b27;border-bottom:1px solid #121b27;font-size:10.5px;color:#7d8ca0;pointer-events:none}
 .scale span{position:absolute;top:2px;transform:translateX(-50%);font-variant-numeric:tabular-nums}
 .tag{position:absolute;left:8px;font-size:10.5px;color:#6f7f93;pointer-events:none;letter-spacing:.05em}
-.copy{background:linear-gradient(180deg,#0c121a,#0a0f15);border:1px solid var(--line);border-radius:12px;overflow-y:auto;padding:6px 16px 10px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.marks{position:absolute;inset:0;pointer-events:none}
+.mk{position:absolute;transform:translateX(-50%);font:500 11px/1 "JetBrains Mono",ui-monospace,monospace;color:#cfe9ff;background:rgba(6,14,24,.78);border:1px solid rgba(51,201,255,.45);border-radius:5px;padding:2px 5px;white-space:nowrap}
+.mk.cq{border-color:rgba(57,224,122,.75);color:#c9ffdd}
+.mk.tg{border-color:var(--amber);color:#fff2cc;box-shadow:0 0 12px rgba(255,194,58,.5)}
+.mk.dup{opacity:.5}
+.work{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;min-height:0}
+.app.autov{grid-template-rows:auto auto minmax(0,1fr) auto}
+.app.autov .cards,.app.autov .tgrp{display:none}
+.app.autov .scope{grid-template-rows:clamp(48px,8vh,84px) 18px clamp(70px,13vh,150px) 0}
+.app.autov .scope .cv:nth-child(4){display:none}
+.app.autov .band{bottom:0}
+.work.on{grid-template-columns:minmax(0,1fr) minmax(330px,400px)}
+.copy{background:linear-gradient(180deg,#0c121a,#0a0f15);border:1px solid var(--line);border-radius:12px;overflow-y:auto;padding:6px 16px 10px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;min-height:0}
 .ln{display:grid;grid-template-columns:5.2em minmax(0,1fr);gap:12px;align-items:baseline;padding:6px 0;border-bottom:1px solid #131b25}
 .ln time{font-size:12.5px;color:#5f6e81;font-variant-numeric:tabular-nums;white-space:nowrap}
 .x{font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;font-size:var(--size,30px);line-height:1.3;color:#dce9f7;overflow-wrap:anywhere;white-space:pre-wrap;letter-spacing:.02em}
 .x .n{animation:fresh 1.8s ease-out}
 @keyframes fresh{from{color:#8fe3ff;text-shadow:0 0 14px rgba(51,201,255,.9)}to{color:#dce9f7;text-shadow:none}}
-.ln:last-child .x::after{content:"";display:inline-block;width:.55em;height:1.02em;margin-left:3px;vertical-align:-.15em;background:var(--cyan);box-shadow:0 0 10px rgba(51,201,255,.7);animation:blink 1.05s steps(1) infinite}
+#out .ln:last-child .x::after{content:"";display:inline-block;width:.55em;height:1.02em;margin-left:3px;vertical-align:-.15em;background:var(--cyan);box-shadow:0 0 10px rgba(51,201,255,.7);animation:blink 1.05s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
-@media (prefers-reduced-motion:reduce){.x .n,.ln:last-child .x::after{animation:none}}
+@media (prefers-reduced-motion:reduce){.x .n,#out .ln:last-child .x::after{animation:none}}
+#tr .x{font-size:calc(var(--size,30px) * .72)}
+#tr .who{display:block;font:600 12px/1.2 "Oxanium",sans-serif;letter-spacing:.05em;color:var(--dim);margin-bottom:2px}
+#tr .tx .x{color:#ffc9cf}
+#tr .tx .who{color:var(--red)}
+#tr .ev .x{color:#9df5bd;font-family:"Oxanium",sans-serif;font-size:17px}
+#tr .dry .x{color:#8a98aa;font-family:"Oxanium",sans-serif;font-size:16px;font-style:italic}
 .empty{max-width:52em;padding:14px 2px;color:var(--dim);font-size:16px}
 .empty h2{margin:0 0 8px;color:var(--ink);font-size:20px;font-weight:600}
 .empty ol{margin:0;padding-left:1.3em}.empty li{margin:3px 0}
 .empty b{color:var(--ink)}
-.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.auto{display:none;flex-direction:column;gap:7px;min-height:0;overflow-y:auto;background:linear-gradient(180deg,#0f1620,#0b1017);border:1px solid var(--line);border-radius:12px;padding:10px 12px;-webkit-overflow-scrolling:touch}
+.work.on .auto{display:flex}
+.ahead{display:flex;align-items:center;gap:8px}
+.ahead h2{margin:0;font-size:16px;letter-spacing:.08em;flex:1}
+.onair{font:700 12px/1 "Oxanium",sans-serif;letter-spacing:.12em;padding:6px 9px;border-radius:6px;border:1px solid #3a2228;color:#6b3c45;background:#160c0f}
+.onair.prac{color:#1b1300;background:linear-gradient(180deg,#ffd76a,#e0a61a);border-color:#ffe39a}
+.onair.on{color:#fff;background:linear-gradient(180deg,#ff5b6b,#c9273b);border-color:#ff8c98;box-shadow:0 0 18px rgba(255,77,94,.7)}
+.stop{background:linear-gradient(180deg,#ff5b6b,#c9273b);color:#fff;font-weight:700;letter-spacing:.06em;min-width:96px;box-shadow:0 4px 16px rgba(220,50,70,.35)}
+.arow{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.arow .l{min-width:2.9em;font-size:11.5px}
+.seg.sm button{min-height:34px;padding:0 9px;font-size:14px}
+.chk{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 10px;border-radius:9px;background:var(--panel2);border:1px solid var(--line);font-size:14px;color:#b9c6d6;cursor:pointer}
+.chk input{width:20px;height:20px;accent-color:var(--green)}
+.chk.warn{border-color:rgba(255,194,58,.6)}
+.txsw{display:flex;align-items:center;gap:8px;font-weight:600}
+.txsw input{width:22px;height:22px;accent-color:var(--red)}
+.dial{width:6.4em;flex:1 1 5em;background:#0a0f15;border:1px solid var(--line);border-radius:9px;min-height:36px;padding:0 10px}
+.astat{background:#0a1018;border:1px solid var(--line);border-radius:10px;padding:8px 11px;font-size:15px;line-height:1.35;min-height:2.6em}
+.astat .why{display:block;font-size:13px;color:var(--amber);margin-top:4px}
+.callbtn{background:linear-gradient(180deg,#58e695,#1f9e57);color:#04130a;font-weight:700;margin-top:6px;display:none}
+.callbtn.show{display:inline-block}
+.alist{background:#0a0f15;border:1px solid var(--line);border-radius:10px;font-size:13.5px}
+.alist h3{margin:0;padding:7px 10px;font-size:12px;letter-spacing:.08em;color:var(--dim);border-bottom:1px solid #141d28;display:flex;justify-content:space-between;align-items:center}
+.alist .rows{max-height:180px;overflow-y:auto}
+.alist.grow{flex:1 1 auto;display:flex;flex-direction:column;min-height:130px}
+.alist.grow .rows{flex:1 1 0;max-height:none;min-height:0}
+.tab{min-height:30px;padding:0 10px;font-size:12px;letter-spacing:.06em;color:var(--dim);border-radius:7px}
+.tab[aria-pressed=true]{color:var(--cyan);background:#13202f;box-shadow:inset 0 0 0 1px rgba(51,201,255,.3)}
+.tab b{font-weight:600;color:inherit}
+.sg{display:grid;grid-template-columns:3.4em 5.6em 2.2em minmax(0,1fr);gap:6px;padding:5px 10px;border-bottom:1px solid #121a24;align-items:baseline}
+.sg .t{color:#6f7f93;font-variant-numeric:tabular-nums}
+.sg .c{font-family:"JetBrains Mono",monospace;font-weight:500;color:#dbeeff}
+.sg .w{color:#6f7f93;font-variant-numeric:tabular-nums}
+.sg .s{font-family:"JetBrains Mono",monospace;color:#9fb1c5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:rtl;text-align:left}
+.sg.cq .c{color:#9df5bd}
+.sg.tg{background:rgba(255,194,58,.08)}
+.lg{display:grid;grid-template-columns:4.6em 6.2em 2.8em minmax(0,1fr);gap:6px;padding:5px 10px;border-bottom:1px solid #121a24}
+.lg .c{font-family:"JetBrains Mono",monospace;color:#dbeeff}
+.lg .q{color:#6f7f93;font-size:12px;text-align:right}
+.lg .q.ok{color:var(--green)}
+.mini{min-height:30px;padding:0 9px;font-size:12.5px;background:var(--panel2);border:1px solid var(--line);border-radius:7px}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 9px}
 .grp{display:flex;align-items:center;gap:6px}
 .l{font-size:12px;color:var(--dim);margin-right:2px}
 .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
-.seg button{min-height:38px;padding:0 12px;border-radius:7px;color:#b9c6d6}
+.seg button{min-height:38px;padding:0 10px;border-radius:7px;color:#b9c6d6}
 .seg button[aria-pressed=true]{background:linear-gradient(180deg,#1d3046,#16243a);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(51,201,255,.35)}
 .btn{background:var(--panel2);border:1px solid var(--line);min-height:44px}
+.btn.autob[aria-pressed=true]{color:var(--amber);border-color:rgba(255,194,58,.55);box-shadow:inset 0 0 0 1px rgba(255,194,58,.3)}
 .inmeter{width:84px;height:8px;border-radius:4px;background:#1a2330;overflow:hidden}
 .inmeter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2fbf71,#c9e43a 70%,#ff5a4f)}
 details{flex:none}
@@ -100,24 +165,28 @@ details[open] summary::before{content:"\2212"}
   display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px 26px;padding:18px 20px 20px;background:linear-gradient(180deg,#131c28,#0d131b);border:1px solid #27405e;border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.65)}
 .mhead{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:-4px}
 .mhead h3{margin:0;font-size:17px}
-.hin{display:flex;align-items:center;gap:8px}
 .more label{display:block;font-size:13.5px;color:var(--dim);margin:2px 0 4px}
 .more input[type=range]{width:100%;height:40px;accent-color:var(--cyan)}
+.more input[type=text],.more input[type=password],.more input[type=number]{width:100%;background:#0a0f15;border:1px solid var(--line);border-radius:9px;min-height:42px;padding:0 10px;margin-bottom:6px}
+.more .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .more select{background:#0a0f15;border:1px solid var(--line);width:100%}
 .more h3{margin:0 0 6px;font-size:15px}
 .more p,.more li{margin:0 0 6px;font-size:14px;color:#a9b6c6;max-width:60ch}
 .more ol{margin:0;padding-left:1.2em}
+.more .chk{margin:4px 0}
 .toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#16233a;border:1px solid #27405e;color:var(--ink);padding:10px 16px;border-radius:10px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:6}
 .toast.show{opacity:1}
 .resume{position:fixed;inset:0;display:none;place-items:center;background:rgba(3,6,10,.78);z-index:5}
 .resume.show{display:grid}
 .resume button{font-size:20px;padding:0 28px;min-height:64px}
+@media (max-width:900px){.work.on{grid-template-columns:minmax(0,1fr) 330px}}
 @media (max-width:700px){
   html,body{height:auto}
   body{overflow:auto}
   .app{height:auto;min-height:100dvh}
   .cards{grid-template-columns:1fr 1fr}
   .copy{min-height:55vh}
+  .work.on{grid-template-columns:1fr}
   .ln{grid-template-columns:1fr;gap:0}
   .go{min-width:0}
   .more{top:calc(env(safe-area-inset-top) + 12px);max-height:calc(100dvh - 40px)}
@@ -125,7 +194,7 @@ details[open] summary::before{content:"\2212"}
 </style>
 </head>
 <body>
-<div class="app">
+<div class="app" id="app">
   <header>
     <div class="brand"><div class="logo" aria-hidden="true"><i></i></div>
       <div><h1>CW Decoder</h1><div class="sub">KD9RDU &middot; IC-746</div></div></div>
@@ -147,27 +216,43 @@ details[open] summary::before{content:"\2212"}
   <div class="scope" id="scope" aria-label="Spectrum and waterfall. Tap a signal to tune to it.">
     <div class="cv"><canvas id="sp"></canvas><span class="tag" style="top:4px">SPECTRUM</span></div>
     <div class="scale" id="scale"></div>
-    <div class="cv"><canvas id="wf"></canvas></div>
+    <div class="cv"><canvas id="wf"></canvas><div class="marks" id="marks"></div></div>
     <div class="cv"><canvas id="kt"></canvas><span class="tag" style="top:3px">KEYING</span></div>
     <div class="band" id="band"></div>
   </div>
 
-  <main class="copy" id="out" aria-label="Decoded text">
-    <div class="empty" id="empty">
-      <h2>Decoded CW shows up here in large type</h2>
-      <ol>
-        <li>Run the 3.5 mm cable from the IC-746 rear <b>EXT SP</b> jack to the Saramonic adapter, and plug the adapter into the iPad.</li>
-        <li>Turn the AF knob low, tune in a CW signal, then tap <b>Start listening</b> and allow the microphone.</li>
-        <li>Raise AF until the <b>Input</b> meter reads about -30 to -15 dB. Tone tracks the signal by itself, or tap a signal on the waterfall.</li>
-      </ol>
-      <p>No radio handy? Choose <b>Test</b> below for a practice signal.</p>
-    </div>
-  </main>
+  <div class="work" id="work">
+    <main class="copy" id="out" aria-label="Decoded text">
+      <div class="empty" id="empty">
+        <h2>Decoded CW shows up here in large type</h2>
+        <ol>
+          <li>Connect the radio audio to the iPad (Saramonic cable from the rear <b>EXT SP</b> jack, or the SignaLink on the rear <b>ACC(1)</b> socket).</li>
+          <li>Tune in a CW signal, then tap <b>Start listening</b> and allow the microphone.</li>
+          <li>Set the level so the <b>Input</b> meter reads about -30 to -15 dB. Tone tracks the signal by itself, or tap a signal on the waterfall.</li>
+        </ol>
+        <p>Tap <b>Auto QSO</b> for automatic contacts. No radio handy? Choose <b>Practice</b> for a make-believe band that answers back.</p>
+      </div>
+    </main>
+    <main class="copy" id="tr" aria-label="QSO transcript" hidden></main>
+    <aside class="auto" id="auto" aria-label="Automatic QSO console">
+      <div class="ahead"><h2>AUTO QSO</h2><span class="onair" id="onair">ON AIR</span><button class="stop" id="stopBtn">STOP</button></div>
+      <div class="arow"><span class="l">Mode</span><div class="seg sm" id="modeSeg"><button data-mode="off" aria-pressed="true">Off</button><button data-mode="answer" aria-pressed="false">Answer CQs</button><button data-mode="cq" aria-pressed="false">Call CQ</button></div></div>
+      <div class="arow"><span class="l">Style</span><div class="seg sm" id="styleSeg"><button data-style="contest">Contest</button><button data-style="normal">Regular QSO</button></div></div>
+      <div class="arow"><span class="l">Band</span><div class="seg sm" id="bandSeg"></div></div>
+      <div class="arow"><label class="chk" id="swrBox"><input type="checkbox" id="swrOk">SWR under 2</label>
+        <label class="chk txsw" id="txBox"><input type="checkbox" id="txOn">Transmit</label>
+        <input class="dial" id="dial" inputmode="decimal" placeholder="Dial kHz" aria-label="Dial frequency in kHz (optional)"></div>
+      <div class="astat" id="astat">Auto is off.<span class="why" id="awhy"></span><button class="callbtn" id="callBtn">Call</button></div>
+      <div class="alist grow"><h3><span><button class="tab" id="tabSig" aria-pressed="true">SIGNALS <b id="sgN"></b></button><button class="tab" id="tabLog" aria-pressed="false"><span id="logTitle">LOG</span></button></span><button class="mini" id="adifBtn">Export ADIF</button></h3>
+        <div class="rows" id="sgList"></div><div class="rows" id="logList" hidden></div></div>
+    </aside>
+  </div>
 
   <div class="bar">
-    <div class="grp"><span class="l">Source</span><div class="seg"><button id="srcMic" aria-pressed="true">Radio</button><button id="srcTest" aria-pressed="false">Test</button></div></div>
-    <div class="grp"><span class="l">Tone</span><div class="seg"><button id="tDn" aria-label="Tone down 10 Hz">&minus;10</button><button id="tAuto" aria-pressed="true">Auto</button><button id="tUp" aria-label="Tone up 10 Hz">+10</button></div></div>
-    <div class="grp"><span class="l">Filter</span><div class="seg"><button data-bw="40">Narrow</button><button data-bw="60">Normal</button><button data-bw="100">Wide</button></div></div>
+    <div class="grp"><span class="l">Source</span><div class="seg"><button id="srcMic" aria-pressed="true">Radio</button><button id="srcTest" aria-pressed="false">Practice</button></div></div>
+    <div class="grp"><button class="btn autob" id="autoBtn" aria-pressed="false">Auto QSO</button></div>
+    <div class="grp tgrp"><span class="l">Tone</span><div class="seg"><button id="tDn" aria-label="Tone down 10 Hz">&minus;10</button><button id="tAuto" aria-pressed="true">Auto</button><button id="tUp" aria-label="Tone up 10 Hz">+10</button></div></div>
+    <div class="grp tgrp"><span class="l">Filter</span><div class="seg"><button data-bw="40">Narrow</button><button data-bw="60">Normal</button><button data-bw="100">Wide</button></div></div>
     <div class="grp"><span class="l">Text</span><div class="seg"><button id="aDn" aria-label="Smaller text">A&minus;</button><button id="aUp" aria-label="Larger text">A+</button></div></div>
     <div class="grp"><button class="btn" id="copyBtn">Copy</button><button class="btn" id="clearBtn">Clear</button></div>
     <details id="moreBox">
@@ -177,17 +262,38 @@ details[open] summary::before{content:"\2212"}
         <div>
           <label for="sqr">Squelch: <span id="sqv"></span> dB. Raise it if noise prints junk letters, lower it to dig out weak signals.</label>
           <input type="range" id="sqr" min="4" max="20" step="1">
-          <label for="spd">Speed: <span id="spdv"></span></label>
+          <label for="spd">Receive speed: <span id="spdv"></span></label>
           <input type="range" id="spd" min="0" max="50" step="1">
           <label for="dev">Audio input</label>
           <select id="dev"><option value="">Default input</option></select>
         </div>
         <div>
+          <h3>Station (sent on the air)</h3>
+          <div class="two"><div><label for="myCall">Call</label><input type="text" id="myCall" autocapitalize="characters" autocomplete="off" spellcheck="false"></div>
+            <div><label for="myZone">CQ zone</label><input type="number" id="myZone" min="1" max="40"></div></div>
+          <div class="two"><div><label for="myName">Name</label><input type="text" id="myName" autocapitalize="characters" autocomplete="off" spellcheck="false"></div>
+            <div><label for="myQth">QTH</label><input type="text" id="myQth" autocapitalize="characters" autocomplete="off" spellcheck="false"></div></div>
+          <div class="two"><div><label for="maxWpm">Top send speed</label><input type="number" id="maxWpm" min="10" max="40"></div>
+            <div><label for="cqWpm">CQ speed</label><input type="number" id="cqWpm" min="10" max="40"></div></div>
+          <label for="txLvl">Transmit audio level: <span id="txLv"></span></label>
+          <input type="range" id="txLvl" min="5" max="100" step="5">
+          <button class="btn" id="vvvBtn">Send a level test (VVV DE call)</button>
+        </div>
+        <div>
+          <h3>Auto QSO</h3>
+          <label class="chk"><input type="checkbox" id="askFirst">Ask me before calling each station</label>
+          <label class="chk"><input type="checkbox" id="needTwice">Only call a station after its call is copied twice</label>
+          <label for="qrzKey">QRZ Logbook API key (QRZ.com, Logbook, Settings)</label>
+          <input type="password" id="qrzKey" autocomplete="off" spellcheck="false" placeholder="Paste the key once; it stays on this iPad">
+          <p>Each contact made on the air goes to your QRZ logbook; your logbook sync copies it to the others. Practice contacts are never sent.</p>
+        </div>
+        <div>
           <h3>Wired to the IC-746</h3>
           <ol>
-            <li>IC-746 rear <b>EXT SP</b> jack, 3.5 mm cable, Saramonic SR-C2003, iPad USB-C port.</li>
-            <li>The radio speaker goes quiet while EXT SP is in use; that is normal.</li>
-            <li>Radio in CW mode, 500 Hz filter or wider, noise blanker off unless static is bad.</li>
+            <li>Receive only: rear <b>EXT SP</b> jack, 3.5 mm cable, Saramonic SR-C2003, iPad.</li>
+            <li>Receive and transmit: SignaLink USB (SLUSB8PD) on the rear <b>ACC(1)</b> socket, USB to the iPad. Radio in <b>USB</b> mode for Auto QSO.</li>
+            <li>Set the SignaLink TX knob so ALC barely moves on the level test. Keep the iPad volume where you set it.</li>
+            <li>Check SWR on the radio after every band change; Auto will not transmit until you tick the box.</li>
           </ol>
         </div>
         <div>
@@ -307,6 +413,7 @@ class CWDecoder {
     this.markSum = 0; this.markN = 0;
     this.markLevel = 0; this.open = false;
     this.pending = []; this.sinceOpen = 0; this.sinceMark = 1e9; this.openChar = false;
+    this.pre = []; this.preWord = false;          // characters keyed just before the squelch opened
   }
   setFixedWpm(w) {
     this.fixedWpm = w || 0;
@@ -344,8 +451,12 @@ class CWDecoder {
       if (want === this.cand) this.candRun += fm; else { this.cand = want; this.candRun = fm; }
       if (this.candRun >= minRun) {
         const prior = this.runMs - this.candRun + fm;
-        if (this.state) this.endMark(prior); else this.endGap(prior);
+        let keepGap = false;
+        if (this.state) keepGap = this.endMark(prior) === false; else { this.endGap(prior); this.lastGap = prior; }
         this.state = want; this.runMs = this.candRun; this.candRun = 0;
+        if (keepGap) {                // a noise blip inside a gap: the gap simply carries on
+          this.runMs = this.lastGap + prior + this.runMs; this.sinceMark = this.runMs;
+        }
         if (this.state) { this.markSum = 0; this.markN = 0; }
         this.onKey(this.state && this.open);
         return;
@@ -357,13 +468,17 @@ class CWDecoder {
     else this.idle(this.runMs);
   }
 
+  // Returns false when the mark was a noise blip that is ignored.
   endMark(ms) {
     const lvl = this.markN ? this.markSum / this.markN : 0;
+    // While a station is being copied, a blip far weaker than its keying is noise: skip it entirely,
+    // so it neither prints a stray E or I nor breaks the silence that ends a transmission.
+    if (this.open && ms < 3 * this.dit && lvl < this.markLevel - 9) return false;
     this.markLevel = 0.6 * this.markLevel + 0.4 * lvl;
     const wasOpen = this.open;
     if (!this.open && this.markLevel > this.squelch) this.open = true;
     else if (this.open && this.markLevel < this.squelch - 2) this.open = false;
-    if (this.open && !wasOpen) { if (this.marks.length > 6) this.marks = this.marks.slice(-6); this.sinceOpen = 0; this.openChar = true; }
+    if (this.open && !wasOpen) { if (this.marks.length > 6) this.marks = this.marks.slice(-6); this.sinceOpen = 0; this.openChar = !this.recoverPre(); }
     if (this.open) this.sinceOpen++;
     if (ms > Math.max(10 * this.dit, 600)) { this.elems = []; return; }   // a carrier or tune-up
     this.elems.push({ ms: ms, lvl: lvl });
@@ -380,8 +495,29 @@ class CWDecoder {
     else if (ms < 40 * u) { this.longGaps.push(ms); if (this.longGaps.length > 30) this.longGaps.shift(); this.learnSpacing(); }
   }
 
+  // When the squelch opens part way into a transmission, rescue the characters already keyed,
+  // keeping only those made entirely of signal-strength elements (noise blips are weaker).
+  recoverPre() {
+    const need = Math.max(this.squelch - 2, Math.min(0.55 * this.markLevel, this.markLevel - 9)), keep = [];
+    for (const t of this.pre) {
+      if (t === ' ') { if (keep.length && keep[keep.length - 1] !== ' ') keep.push(' '); continue; }
+      if (t.length && t.every(e => e.lvl >= need)) keep.push(t);
+      else if (keep.length) keep.length = 0;            // a noise character breaks the run: keep only what follows
+    }
+    while (keep.length && keep[0] === ' ') keep.shift();
+    this.pre = []; this.preWord = false;
+    if (!keep.length) return false;
+    if (keep[keep.length - 1] !== ' ') keep.push(' ');
+    this.pending = keep.concat(this.pending);
+    return true;
+  }
+
   idle(ms) {
     const u = this.unit;
+    if (!this.open) {
+      if (this.preWord && ms > (this.wordGap || 5 * u)) { this.pre.push(' '); this.preWord = false; }
+      if (ms > 1500 && this.pre.length) { this.pre = []; this.preWord = false; }
+    }
     if (this.elems.length && ms > 2 * u) { this.emit(); }
     const wg = this.wordGap || 5 * u;
     if (this.wordPending && ms > wg) { this.out(' '); this.wordPending = false; }
@@ -397,9 +533,9 @@ class CWDecoder {
 
   emit() {
     let el = this.elems; this.elems = [];
-    if (!this.open) return;
+    if (!this.open) { this.pre.push(el); if (this.pre.length > 14) this.pre.shift(); this.preWord = true; return; }
     if (this.openChar) {                       // drop noise blips caught just before the signal began
-      const keep = 0.6 * Math.max.apply(null, el.map(e => e.lvl));
+      const mx = Math.max.apply(null, el.map(e => e.lvl)), keep = Math.max(0.6 * mx, mx - 8);   // noise blips sit well below the signal
       el = el.filter(e => e.lvl >= keep);
       this.openChar = false;
       if (!el.length) return;
@@ -473,6 +609,657 @@ class CWDecoder {
 }
 </script>
 <script>
+// Automatic CW QSO engine. Pure logic: it reads what each signal sent (one finished
+// transmission at a time), decides what to send back, and logs completed contacts.
+// The page supplies send(), log(), canTx() and the clock; Node tests drive it the same way.
+const QSO = (function () {
+  const CALL_RE = /^(?:[A-Z0-9]{1,4}\/)?(?:[A-Z]{1,2}|[0-9][A-Z]{1,2}|[A-Z][0-9][A-Z]?)[0-9][A-Z0-9]{0,3}[A-Z](?:\/[A-Z0-9]{1,4})?$/;
+  const NOT_CALLS = new Set(['5NN', '599', 'TU', 'TNX', 'CQ', 'TEST', 'QRZ', 'DE', 'AGN']);
+  const CUT = { T: '0', O: '0', A: '1', U: '2', V: '3', E: '5', B: '7', D: '8', N: '9' };
+  const ENDERS = new Set(['K', 'KN', 'BK', 'SK', 'AR', 'KKN']);
+  const STOP = new Set(['HW', 'HW?', 'RIG', 'WX', 'ANT', 'PWR', 'K', 'KN', 'BK', 'SK', 'AR', '=', 'NAME', 'OP', 'RST', 'UR', 'TNX', 'DE', 'BTU', 'SO', 'ES']);
+
+  function isCall(t) { return t.length >= 3 && t.length <= 12 && !NOT_CALLS.has(t) && CALL_RE.test(t); }
+  function cut(s) { return s.replace(/[TOAUVEBDN]/g, c => CUT[c]); }
+  function lev(a, b) {
+    const d = []; for (let i = 0; i <= a.length; i++) d[i] = [i];
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] || a[i - 1] === '*' || b[j - 1] === '*' ? 0 : 1));
+    return d[a.length][b.length];
+  }
+  function norm(text) {
+    return String(text).toUpperCase().replace(/<KN>/g, ' KN ').replace(/<SK>/g, ' SK ').replace(/<AR>/g, ' AR ')
+      .replace(/<BT>|=/g, ' = ').replace(/<[A-Z]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  function rstDigits(t) { return t.length === 3 ? t[0] + cut(t.slice(1)) : t; }
+
+  // What did they send? (tokens, calls, my call, queries, exchange, name, QTH...)
+  function analyze(text, my, target) {
+    const s = norm(text), tk = s ? s.split(' ') : [];
+    const r = { text: s, tk };
+    const counts = {};
+    tk.forEach(t => { if (isCall(t)) counts[t] = (counts[t] || 0) + 1; });
+    r.calls = Object.keys(counts).filter(c => c !== my); r.counts = counts;
+    r.isCQ = tk.includes('CQ') || tk.includes('TEST') || tk.includes('QRZ') || tk.includes('QRZ?');
+    r.myExact = tk.includes(my);
+    r.myFuzzy = !r.myExact && tk.some(t => { const p = t.replace(/\?/g, ''); return p.length >= 4 && p !== target && p !== my && lev(p, my) <= 1; });
+    r.partial = tk.some(t => {
+      if (!t.includes('?')) return false;
+      const p = t.replace(/\?/g, '');
+      return p.length >= 2 && p !== my && (my.startsWith(p) || my.endsWith(p) || my.includes(p));
+    });
+    r.query = tk.some(t => ['?', 'AGN', 'AGN?', 'NR?', 'RPT', 'PSE?', 'NR', 'ZONE?', 'CL?', 'CALL?'].includes(t)) || /^\?+$/.test(s);
+    r.other = r.calls.filter(c => c !== target && lev(c, my) > 1);
+    r.tu = tk.some(t => ['TU', 'TNX', 'QSL', 'R', 'RR', 'EE', '73', 'GL', 'FB'].includes(t));
+    r.ended = tk.length > 0 && ENDERS.has(tk[tk.length - 1]);
+    r.signoff = tk.includes('SK') || tk.includes('73') || (tk.includes('EE') && tk.length < 6);
+    // RST and the token after it (contest zone)
+    const ri = tk.findIndex(t => /^[1-5][1-9NT][1-9NT]$/.test(t));
+    if (ri >= 0) {
+      r.rst = rstDigits(tk[ri]);
+      const z = tk[ri + 1];
+      if (z && /^[0-9TOAUVEBDN]{1,2}$/.test(z)) { const n = parseInt(cut(z), 10); if (n >= 1 && n <= 40) r.zone = n; }
+    }
+    if (!r.zone && r.myExact) {                      // "KD9RDU 14" with RST lost
+      const mi = tk.indexOf(my), z = tk[mi + 1];
+      if (z && /^[0-9TOAUVEBDN]{1,2}$/.test(z) && /[0-9]/.test(z)) { const n = parseInt(cut(z), 10); if (n >= 1 && n <= 40) r.zone = n; }
+    }
+    const pick = (keys, max) => {
+      for (const k of keys) {
+        let i = tk.indexOf(k); if (i < 0) continue; i++;
+        while (tk[i] === 'IS' || tk[i] === 'HR' || tk[i] === 'NR' || tk[i] === 'HERE') i++;
+        const out = [];
+        while (i < tk.length && out.length < max && !STOP.has(tk[i]) && !isCall(tk[i]) && /^[A-Z][A-Z0-9.\/-]*$/.test(tk[i])) { if (out[out.length - 1] !== tk[i]) out.push(tk[i]); i++; }
+        if (out.length) return out.join(' ');
+      }
+      return '';
+    };
+    r.name = pick(['NAME', 'OP'], 1);
+    r.qth = pick(['QTH'], 3);
+    return r;
+  }
+
+  // How long a signal must stay silent before its transmission counts as finished.
+  function eotMs(style, text, unitMs) {
+    const u = unitMs || 60;
+    if (style === 'contest') return Math.max(450, 10 * u);
+    const tk = norm(text).split(' ');
+    return ENDERS.has(tk[tk.length - 1]) ? Math.max(600, 10 * u) : 2500;
+  }
+
+  class Engine {
+    constructor(o) {
+      this.o = o;
+      this.my = o.my;                    // { call, name, qth, zone, wpm, maxWpm }
+      this.style = o.style || 'contest'; // 'contest' | 'normal'
+      this.mode = 'off';                 // 'off' | 'answer' | 'cq'
+      this.maxTries = o.maxTries || 3;
+      this.needTwice = o.needTwice !== false;
+      this.askFirst = !!o.askFirst;
+      this.heard = new Map();            // call -> { n, last }
+      this.tries = new Map();            // call -> { n, last }
+      this.skipUntil = new Map();        // call -> time
+      this.worked = new Set();           // band|call
+      this.dryAt = new Map();
+      this.reset();
+    }
+    now() { return this.o.now(); }
+    ev(kind, text, extra) { if (this.o.event) this.o.event(kind, text, extra || {}); }
+    status(s) { this.statusText = s; this.ev('status', s); }
+    reset() { this.state = 'idle'; this.t = null; this.txBusy = false; this.listenAt = 0; this.proposal = null; this.cqTone = 0; this.qrlDone = false; this.nextCqAt = 0; }
+    setMode(m) {
+      this.mode = m; this.reset();
+      this.status(m === 'off' ? 'Auto is off' : m === 'answer' ? 'Listening for stations calling CQ' : 'Ready to call CQ');
+    }
+    stop() { this.setMode('off'); }
+    markWorked(band, call) { this.worked.add(band + '|' + call); }
+    isDupe(call) { return this.worked.has(this.o.band() + '|' + call); }
+
+    wpmFor(info) {
+      const max = this.my.maxWpm || 32;
+      if (this.mode === 'cq') return Math.min(max, this.my.wpm || 20);
+      return Math.max(12, Math.min(max, Math.round((info && info.wpm) || this.my.wpm || 20)));
+    }
+
+    async tx(text, info, ch) {
+      if (!this.o.canTx()) return false;
+      this.txBusy = true;
+      this.ev('tx', text, { tone: info.tone, wpm: this.wpmFor(info), ch });
+      try { await this.o.send(text, { tone: info.tone, wpm: this.wpmFor(info), ch }); }
+      finally { this.txBusy = false; this.listenAt = this.now(); }
+      return this.mode !== 'off';
+    }
+
+    eligible(call) {
+      if (!call || call === this.my.call || this.isDupe(call)) return false;
+      const sk = this.skipUntil.get(call); if (sk && sk > this.now()) return false;
+      const tr = this.tries.get(call); if (tr && tr.n >= this.maxTries && this.now() - tr.last < 10 * 60e3) return false;
+      if (this.needTwice) { const h = this.heard.get(call); if (!h || h.n < 2) return false; }
+      return true;
+    }
+    noteHeard(r, tone) {
+      const t = this.now();
+      for (const c of r.calls) {
+        const h = this.heard.get(c);
+        if (h && t - h.last < 120e3) { h.n += r.counts[c]; h.last = t; h.tone = tone; } else this.heard.set(c, { n: r.counts[c], last: t, tone });
+      }
+    }
+    bestCall(t) {          // a busted copy of the call gets replaced by the version heard most often on that signal
+      let best = t.call, bn = (this.heard.get(t.call) || {}).n || 0;
+      for (const [c, h] of this.heard) {
+        if (c === best || this.now() - h.last > 180e3 || Math.abs((h.tone || 0) - t.tone) > 60) continue;
+        if (lev(c, t.call) <= 1 && h.n > bn) { best = c; bn = h.n; }
+      }
+      return best;
+    }
+    cqCall(r) {        // the station calling CQ in this transmission, if any
+      if (!r.isCQ && !(r.tu && r.calls.length === 1)) return null;
+      if (r.myExact) return null;
+      let best = null;
+      for (const c of r.calls) if (!best || r.counts[c] > r.counts[best]) best = c;
+      if (best && this.style === 'normal' && r.tk.includes('DX') && /^(K|N|W|A[A-L])[0-9A-Z]*$/.test(best)) return null;  // US station asking for DX
+      return best;
+    }
+
+    // A finished transmission from signal channel ch. info: { tone, wpm, snr }
+    hear(ch, text, info) {
+      if (this.mode === 'off' || this.txBusy) return;
+      const r = analyze(text, this.my.call, this.t && this.t.call);
+      if (!r.tk.length) return;
+      this.noteHeard(r, info.tone);
+      const fromTarget = this.t && (ch === this.t.ch || (r.calls.includes(this.t.call) && Math.abs(info.tone - this.t.tone) < 60));
+      switch (this.state) {
+        case 'idle': return this.mode === 'answer' ? this.onIdleAnswer(ch, r, info) : this.onIdleCq(ch, r, info);
+        case 'calling': if (fromTarget) return this.onCalling(r, info); return;
+        case 'exch': if (fromTarget) return this.onExch(r, info); return;
+        case 'report': if (fromTarget) return this.onReport(r, info); return;
+        case 'cq': return this.onCqReply(ch, r, info);
+        case 'run_exch': case 'run_report': if (fromTarget) return this.onRunReply(r, info); return;
+      }
+    }
+
+    // ----- answering CQs -----
+    onIdleAnswer(ch, r, info) {
+      let call = this.cqCall(r);
+      if (!call) return;
+      call = this.bestCall({ call, tone: info.tone });
+      if (!this.eligible(call)) {
+        if (!this.isDupe(call) && this.needTwice && (this.heard.get(call) || {}).n < 2) this.status(`Heard ${call} calling CQ; waiting to copy the call a second time`);
+        else if (this.isDupe(call)) this.status(`${call} is already in the log on this band`);
+        return;
+      }
+      const t = { call, ch, tone: info.tone, wpm: info.wpm, snr: info.snr, rx: {} };
+      if (!this.o.canTx()) {
+        const last = this.dryAt.get(call) || 0;
+        if (this.now() - last > 30e3) { this.dryAt.set(call, this.now()); this.ev('dry', `Would call ${call} now (not transmitting)`, t); }
+        return;
+      }
+      if (this.askFirst) { this.proposal = t; this.ev('propose', `Call ${call}?`, t); this.status(`Tap Call to answer ${call}`); return; }
+      this.callTarget(t);
+    }
+    approve() { const t = this.proposal; this.proposal = null; if (t && this.state === 'idle' && this.mode === 'answer') this.callTarget(t); }
+    async callTarget(t, twice) {
+      this.t = t; this.state = 'calling';
+      const tr = this.tries.get(t.call); const n = tr && this.now() - tr.last < 10 * 60e3 ? tr.n + 1 : 1;
+      this.tries.set(t.call, { n, last: this.now() });
+      this.status(`Calling ${t.call} (try ${n} of ${this.maxTries})`);
+      const my = this.my.call;
+      const msg = this.style === 'contest' ? (twice ? `${my} ${my}` : my) : `${t.call} DE ${my} ${my} K`;
+      await this.tx(msg, t, t.ch);
+    }
+    onCalling(r, info) {
+      const t = this.t, my = this.my.call, z = this.my.zone;
+      if (r.myExact || r.myFuzzy || r.partial) {
+        if (this.style === 'contest') {
+          if ((r.rst || r.zone) && (r.myExact || r.myFuzzy)) {
+            if (!r.zone && !t.askedNr) { t.askedNr = true; t.rxRst = r.rst; this.status(`Zone from ${t.call} not copied; asking again`); return this.tx('NR?', t, t.ch); }
+            t.rx = { rst: r.rst || t.rxRst || '599', zone: r.zone || '' };
+            t.exchTries = 1; this.state = 'exch';
+            this.status(`${t.call} came back; sending the exchange`);
+            return this.tx(r.myExact ? `5NN ${z}` : `${my} ${my} 5NN ${z}`, t, t.ch);
+          }
+          return this.callTarget(t, true);                          // "KD9?" or our call without exchange: repeat it
+        }
+        // normal QSO: they answered with their report
+        t.rx = { rst: r.rst || '599', name: r.name, qth: r.qth };
+        const rst = this.rstFor(t);
+        t.rstS = rst; this.state = 'report';
+        this.status(`${t.call} answered; sending report ${rst}`);
+        const nm = r.name ? `${r.name} ` : '';
+        return this.tx(`R R ${t.call} DE ${my} TNX ${nm}FER CALL UR RST ${rst} ${rst} NAME ${this.my.name} ${this.my.name} QTH ${this.my.qth} ${this.my.qth} HW? ${t.call} DE ${my} KN`, t, t.ch);
+      }
+      if (t.askedNr && r.zone == null) {
+        const z = r.tk.map(x => /^[0-9TOAUVEBDN]{1,2}$/.test(x) && /[0-9]/.test(x) ? parseInt(x.replace(/[TOAUVEBDN]/g, c => ({ T: 0, O: 0, A: 1, U: 2, V: 3, E: 5, B: 7, D: 8, N: 9 })[c]), 10) : 0).find(n => n >= 1 && n <= 40);
+        if (z) { t.rx = { rst: t.rxRst || '599', zone: z }; t.exchTries = 1; this.state = 'exch'; return this.tx(`5NN ${this.my.zone}`, t, t.ch); }
+      }
+      if (r.query && !r.other.length) return this.callTarget(t, true);
+      if (r.other.length || r.isCQ) {          // they worked someone else, or never heard us
+        this.state = 'idle';
+        const tr = this.tries.get(t.call);
+        if (r.isCQ && tr && tr.n < this.maxTries && !r.other.length) return this.callTarget(t);   // still calling CQ: try again
+        this.status(r.other.length ? `${t.call} is working ${r.other[0]}; will try again on the next CQ` : `${t.call} did not hear us`);
+        this.t = null;
+      }
+    }
+    onExch(r, info) {
+      const t = this.t, my = this.my.call, z = this.my.zone;
+      if (r.query || ((r.myExact || r.myFuzzy) && (r.rst || r.zone))) {
+        if (t.exchTries >= 3) return this.finish(t, 'no TU heard');
+        t.exchTries++;
+        return this.tx(`5NN ${z} ${z}`, t, t.ch);
+      }
+      if (r.partial) return this.tx(`${my} ${my} 5NN ${z}`, t, t.ch);
+      return this.finish(t, '');            // TU, a new CQ, or their next contact
+    }
+    onReport(r, info) {
+      const t = this.t, my = this.my.call;
+      if (r.query && !r.signoff) { if ((t.rep = (t.rep || 0) + 1) <= 1) return this.tx(`UR RST ${t.rstS} ${t.rstS} NAME ${this.my.name} ${this.my.name} QTH ${this.my.qth} ${this.my.qth} ${t.call} DE ${my} KN`, t, t.ch); }
+      if (r.name && !t.rx.name) t.rx.name = r.name;
+      this.finish(t, '');
+      const nm = t.rx.name ? `${t.rx.name} ` : '';
+      return this.tx(`TU ${nm}73 GL ${t.call} DE ${my} <SK> EE`, t, t.ch);
+    }
+    rstFor(t) { const s = t.snr || 0; return s >= 24 ? '599' : s >= 16 ? '579' : s >= 10 ? '559' : '449'; }
+
+    finish(t, note) {
+      if (!t || t.logged) return;
+      t.logged = true;
+      const fixed = this.bestCall(t);
+      if (fixed !== t.call) {
+        if (this.isDupe(fixed)) { this.status(`${fixed} was already logged; not logging twice`); this.state = 'idle'; this.t = null; return; }
+        note = (note ? note + '; ' : '') + `call corrected from ${t.call}`; t.call = fixed;
+      }
+      const contest = this.style === 'contest';
+      const q = {
+        call: t.call, rstS: contest ? '599' : (t.rstS || '599'), rstR: (t.rx && t.rx.rst) || '599',
+        srx: contest && t.rx ? String(t.rx.zone || '') : '', stx: contest ? String(this.my.zone) : '',
+        name: (t.rx && t.rx.name) || '', qth: (t.rx && t.rx.qth) || '', wpm: Math.round(t.wpm || 0), tone: Math.round(t.tone || 0),
+        contest, note, when: new Date(this.now())
+      };
+      this.markWorked(this.o.band(), t.call);
+      this.o.log(q);
+      this.status(`Logged ${t.call}${q.srx ? ' zone ' + q.srx : ''}`);
+      this.state = 'idle'; this.t = null;
+      if (this.mode === 'cq') this.nextCqAt = this.now() + (contest ? 300 : 3000);
+    }
+
+    // ----- calling CQ -----
+    onIdleCq(ch, r, info) {
+      if (this.cqTone && Math.abs(info.tone - this.cqTone) < 120) { this.busyAt = this.now(); }   // someone is near our spot
+    }
+    onCqReply(ch, r, info) {
+      if (Math.abs(info.tone - this.cqTone) > 100 || r.isCQ || (r.rst && !r.myExact)) return;      // a CQ or another QSO nearby is not a caller
+      if (this.style === 'normal' ? !(r.myExact || r.myFuzzy || r.tk.includes('DE')) : r.tk.length > 4) return;
+      const cands = r.calls.filter(c => c !== this.my.call && !this.isDupe(c));
+      if (!cands.length) return;
+      let call = cands[0];
+      for (const c of cands) if (r.counts[c] > r.counts[call]) call = c;
+      const t = { call, ch, tone: this.cqTone, wpm: info.wpm, snr: info.snr, rx: {} };
+      this.t = t;
+      const my = this.my.call, z = this.my.zone;
+      if (this.style === 'contest') {
+        this.state = 'run_exch'; t.tries = 1;
+        this.status(`${call} called; sending the exchange`);
+        return this.tx(`${call} 5NN ${z}`, t, ch);
+      }
+      const rst = this.rstFor(t); t.rstS = rst; this.state = 'run_report';
+      this.status(`${call} called; sending report ${rst}`);
+      return this.tx(`${call} DE ${my} GM TNX FER CALL UR RST ${rst} ${rst} NAME ${this.my.name} ${this.my.name} QTH ${this.my.qth} ${this.my.qth} HW? ${call} DE ${my} KN`, t, ch);
+    }
+    onRunReply(r, info) {
+      const t = this.t, my = this.my.call, z = this.my.zone;
+      if (this.state === 'run_exch') {
+        if (r.rst || r.zone || r.tu) {
+          t.rx = { rst: r.rst || '599', zone: r.zone || '' };
+          this.finish(t, '');
+          return this.tx(`TU ${my}`, { tone: this.cqTone, wpm: t.wpm }, t.ch);
+        }
+        const fix = r.calls.find(c => c !== t.call && lev(c, t.call) <= 2);
+        if (fix) { t.call = fix; t.tries = (t.tries || 1) + 1; return this.tx(`${fix} 5NN ${z}`, t, t.ch); }   // they repeated their call: we had it wrong
+        if (r.query && (t.tries = (t.tries || 1) + 1) <= 3) return this.tx(`${t.call} 5NN ${z} ${z}`, t, t.ch);
+        return;
+      }
+      t.rx = { rst: r.rst || '599', name: r.name, qth: r.qth };
+      this.finish(t, '');
+      const nm = r.name ? `${r.name} ` : '';
+      return this.tx(`R TNX ${nm}73 GL ${t.call} DE ${my} <SK> EE`, t, t.ch);
+    }
+    async sendCq() {
+      const my = this.my.call;
+      const info = { tone: this.cqTone, wpm: this.my.wpm };
+      if (!this.qrlDone) {
+        this.qrlDone = true; this.busyAt = 0; this.state = 'qrl';
+        this.status(`Checking ${this.cqTone} Hz is clear (QRL?)`);
+        await this.tx(this.style === 'contest' ? 'QRL?' : 'QRL? DE ' + my, info, -1);
+        this.state = 'qrl_wait'; return;
+      }
+      this.state = 'cq';
+      this.status(`Calling CQ at ${this.cqTone} Hz`);
+      await this.tx(this.style === 'contest' ? `CQ TEST ${my} ${my}` : `CQ CQ CQ DE ${my} ${my} K`, info, -1);
+    }
+
+    // Timeouts. Call often (every 100 ms or so).
+    tick() {
+      if (this.mode === 'off' || this.txBusy) return;
+      const now = this.now(), c = this.style === 'contest';
+      // Count quiet time from the end of our transmission, but never while the other side is still sending.
+      const spot = this.t ? this.t.tone : this.cqTone;
+      const idle = spot && this.o.toneIdleMs ? this.o.toneIdleMs(spot, 70) : Infinity;
+      const since = Math.min(now - this.listenAt, idle);
+      if (this.state === 'calling' && (since > (c ? 4000 : 9000) || now - this.listenAt > (c ? 20000 : 90000))) {
+        const t = this.t; this.state = 'idle'; this.t = null;
+        this.status(`No answer from ${t.call}; listening again`);
+      } else if (this.state === 'exch' && since > 4500) {
+        this.finish(this.t, 'no TU heard');
+      } else if (this.state === 'report' && since > 15000) {
+        this.finish(this.t, 'no reply to our report');
+      } else if ((this.state === 'run_exch' || this.state === 'run_report') && since > (c ? 4000 : 12000)) {
+        this.status(`${this.t.call} went quiet`); this.state = 'idle'; this.t = null; this.nextCqAt = now + 500;
+      }
+      if (this.mode === 'cq' && this.o.canTx()) {
+        if (!this.cqTone) { this.cqTone = this.o.quietTone ? this.o.quietTone() : 700; this.qrlDone = false; }
+        if (now - this.listenAt > 90000 && ['cq', 'qrl_wait', 'run_exch', 'run_report'].includes(this.state)) { this.state = 'idle'; this.t = null; this.nextCqAt = now; }
+        if (this.state === 'qrl_wait' && now - this.listenAt > 3000) {
+          if (this.busyAt && this.busyAt > this.listenAt) { this.status(`${this.cqTone} Hz is in use; moving`); this.cqTone = 0; this.state = 'idle'; return; }
+          this.state = 'idle'; this.nextCqAt = now;
+        }
+        if (this.state === 'cq' && since > (c ? 2500 : 7000)) { this.state = 'idle'; this.nextCqAt = now + (c ? 200 : 2500); }
+        if (this.state === 'idle' && now >= this.nextCqAt) {
+          if (this.busyAt && now - this.busyAt < 4000 && this.qrlDone) { this.status('Someone is on our spot; finding a clear one'); this.cqTone = 0; return; }
+          this.sendCq();
+        }
+      }
+    }
+  }
+  return { Engine, analyze, isCall, eotMs, norm, lev };
+})();
+if (typeof module !== 'undefined') module.exports = QSO;
+
+// One decoded signal ("channel"): a CWDecoder plus the logic that cuts its text into finished
+// transmissions for the QSO engine. The envelope for each channel runs in the audio worklet.
+class CWChannel {
+  constructor(id, tone, o) {
+    this.id = id; this.tone = tone; this.o = o;        // o: { style(), onSegment(ch, text), onChar(ch, c), muted() }
+    this.buf = ''; this.text = ''; this.calls = []; this.lastAt = 0; this.born = Date.now();
+    this.dec = new CWDecoder({ squelch: o.squelch || 9, onChar: c => this.char(c) });
+  }
+  char(c) {
+    if (this.o.muted && this.o.muted()) return;            // ignore our own signal coming back while we transmit
+    if (c === ' ' && (!this.buf || this.buf.endsWith(' '))) return;
+    this.buf += c; this.text = (this.text + c).slice(-160); this.lastAt = Date.now();
+    if (this.o.onChar) this.o.onChar(this, c);
+  }
+  frame(v) {
+    const d = this.dec;
+    d.push(v);
+    if (d.state) return;
+    if (!this.buf.trim() && !d.pending.length) return;
+    const unit = d.unit || 60;
+    if (d.sinceMark >= QSO.eotMs(this.o.style(), this.buf, unit)) {
+      d.flush();
+      const t = this.buf.trim(); this.buf = '';
+      if (t && !(this.o.muted && this.o.muted())) this.o.onSegment(this, t);
+      if (!this.text.endsWith(' ')) this.text += ' ';
+    }
+  }
+  clear() { this.buf = ''; this.dec.pending = []; }
+  get wpm() { return this.dec.wpm; }
+  get snr() { return this.dec.markLevel; }
+  get idleMs() { return this.dec.state ? 0 : this.dec.sinceMark; }
+}
+
+// Picks which tones in the receiver passband deserve a channel, from a dB spectrum.
+// spec: Float32Array of dB per FFT bin; binHz: Hz per bin. Returns peaks [{ tone, db }].
+function findPeaks(spec, binHz, lo, hi, opts) {
+  opts = opts || {};
+  const a = Math.ceil(lo / binHz), b = Math.floor(hi / binHz);
+  const vals = Array.prototype.slice.call(spec, a, b).filter(isFinite).sort((x, y) => x - y);
+  if (!vals.length) return [];
+  const med = vals[vals.length >> 1], need = med + (opts.snr || 12), sep = Math.round((opts.sep || 90) / binHz);
+  const peaks = [];
+  for (let i = a + 1; i < b - 1; i++) {
+    const v = spec[i];
+    if (v < need || v < spec[i - 1] || v < spec[i + 1]) continue;
+    peaks.push({ i, db: v });
+  }
+  peaks.sort((x, y) => y.db - x.db);
+  const out = [];
+  for (const p of peaks) {
+    if (out.some(q => Math.abs(q.i - p.i) < sep)) continue;
+    const y0 = spec[p.i - 1], y1 = spec[p.i], y2 = spec[p.i + 1], den = y0 - 2 * y1 + y2;
+    out.push({ i: p.i, tone: (p.i + (den ? 0.5 * (y0 - y2) / den : 0)) * binHz, db: p.db - med });
+    if (out.length >= (opts.max || 8)) break;
+  }
+  return out;
+}
+if (typeof module !== 'undefined') module.exports = { CWChannel, findPeaks };
+
+// Morse sender: turns text into keyed-tone audio with clean, click-free edges.
+// The radio sits in USB, so a tone at the same audio pitch as the other station puts our
+// signal exactly on their frequency (a J2A emission, which Part 97 counts as CW).
+const MORSE_TX = (function () {
+  const T = {
+    A: '.-', B: '-...', C: '-.-.', D: '-..', E: '.', F: '..-.', G: '--.', H: '....', I: '..', J: '.---',
+    K: '-.-', L: '.-..', M: '--', N: '-.', O: '---', P: '.--.', Q: '--.-', R: '.-.', S: '...', T: '-',
+    U: '..-', V: '...-', W: '.--', X: '-..-', Y: '-.--', Z: '--..',
+    0: '-----', 1: '.----', 2: '..---', 3: '...--', 4: '....-', 5: '.....', 6: '-....', 7: '--...', 8: '---..', 9: '----.',
+    '.': '.-.-.-', ',': '--..--', '?': '..--..', '/': '-..-.', '=': '-...-', '-': '-....-', '+': '.-.-.',
+    '<AR>': '.-.-.', '<SK>': '...-.-', '<KN>': '-.--.', '<BT>': '-...-', '<AS>': '.-...'
+  };
+  // Split text into tokens: prosigns in angle brackets stay whole.
+  function tokens(word) { return word.toUpperCase().match(/<[A-Z]+>|[A-Z0-9.,?\/=+\-]/g) || []; }
+
+  // Returns [[on, units], ...] for the text, standard 1:3:7 spacing.
+  function units(text) {
+    const out = [];
+    const words = String(text).trim().split(/\s+/).filter(Boolean);
+    words.forEach((w, wi) => {
+      const tk = tokens(w).filter(t => T[t]);
+      tk.forEach((t, ti) => {
+        const code = T[t];
+        for (let i = 0; i < code.length; i++) {
+          out.push([1, code[i] === '.' ? 1 : 3]);
+          if (i < code.length - 1) out.push([0, 1]);
+        }
+        if (ti < tk.length - 1) out.push([0, 3]);
+      });
+      if (wi < words.length - 1) out.push([0, 7]);
+    });
+    return out;
+  }
+
+  function durationMs(text, wpm) { return units(text).reduce((a, s) => a + s[1], 0) * 1200 / wpm; }
+
+  // Render keyed tone into a Float32Array. opts: { wpm, tone, rate, level, rise (ms), lead (ms of extra first element) }
+  function render(text, opts) {
+    const rate = opts.rate || 48000, wpm = opts.wpm || 20, tone = opts.tone || 700;
+    const level = opts.level != null ? opts.level : 0.5, riseMs = opts.rise || 5;
+    const u = 1200 / wpm / 1000, segs = units(text);
+    const pre = 0.02, post = 0.03;                                     // a little silence either side
+    const total = pre + post + segs.reduce((a, s) => a + s[1], 0) * u + (opts.lead || 0) / 1000;
+    const n = Math.ceil(total * rate), x = new Float32Array(n);
+    const w = 2 * Math.PI * tone / rate, rise = Math.max(1, Math.round(riseMs / 1000 * rate));
+    let i = Math.round(pre * rate), first = true;
+    for (const [on, len] of segs) {
+      let m = Math.round(len * u * rate);
+      if (on && first && opts.lead) { m += Math.round(opts.lead / 1000 * rate); }
+      if (on) {
+        first = false;
+        for (let k = 0; k < m && i < n; k++, i++) {
+          // raised-cosine edges keep the signal narrow (no key clicks)
+          let e = 1;
+          if (k < rise) e = 0.5 - 0.5 * Math.cos(Math.PI * k / rise);
+          else if (k > m - rise) e = 0.5 - 0.5 * Math.cos(Math.PI * (m - k) / rise);
+          x[i] = level * e * Math.sin(w * i);
+        }
+      } else i += m;
+    }
+    return x;
+  }
+  return { units, durationMs, render, table: T };
+})();
+if (typeof module !== 'undefined') module.exports = MORSE_TX;
+
+// Contact log: keeps every QSO on the iPad, writes ADIF, and posts each new QSO to the
+// QRZ.com Logbook API. QRZ does not allow web pages to read its replies, so the post is sent
+// "no-cors": QRZ receives and stores it, but the page cannot see the answer.
+const QLOG = (function () {
+  const pad = (n, w) => String(n).padStart(w, '0');
+  function field(k, v) { v = v == null ? '' : String(v); return v === '' ? '' : `<${k}:${v.length}>${v}`; }
+  const BANDS = { '160m': [1.8, 2], '80m': [3.5, 4], '40m': [7, 7.3], '30m': [10.1, 10.15], '20m': [14, 14.35], '17m': [18.068, 18.168],
+    '15m': [21, 21.45], '12m': [24.89, 24.99], '10m': [28, 29.7], '6m': [50, 54] };
+
+  function adif(q, st) {
+    const d = q.when instanceof Date ? q.when : new Date(q.when);
+    const date = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1, 2)}${pad(d.getUTCDate(), 2)}`;
+    const time = `${pad(d.getUTCHours(), 2)}${pad(d.getUTCMinutes(), 2)}${pad(d.getUTCSeconds(), 2)}`;
+    const parts = [
+      field('call', q.call), field('qso_date', date), field('time_on', time), field('band', q.band), field('mode', 'CW'),
+      q.freq ? field('freq', Number(q.freq).toFixed(6)) : '',
+      field('rst_sent', q.rstS), field('rst_rcvd', q.rstR),
+      field('station_callsign', st.call), field('operator', st.call), field('my_gridsquare', st.grid),
+      q.contest ? field('contest_id', 'CQ-WW-CW') : '', q.srx ? field('srx_string', q.srx) : '', q.stx ? field('stx_string', q.stx) : '',
+      q.name ? field('name', q.name) : '', q.qth ? field('qth', q.qth) : '',
+      field('comment', ('Auto CW iPad' + (q.note ? '; ' + q.note : '')).slice(0, 80)), '<eor>'
+    ];
+    return parts.filter(Boolean).join(' ');
+  }
+  function file(list, st) {
+    const head = `KD9RDU iPad CW log\n<adif_ver:5>3.1.4 <programid:13>KD9RDU-CW-iPad <eoh>\n`;
+    return head + list.map(q => adif(q, st)).join('\n') + '\n';
+  }
+  async function toQRZ(q, st, key, fetchFn) {
+    if (!key) return 'no key';
+    const body = new URLSearchParams({ KEY: key, ACTION: 'INSERT', ADIF: adif(q, st) });
+    try { await (fetchFn || fetch)('https://logbook.qrz.com/api', { method: 'POST', mode: 'no-cors', body }); return 'sent'; }
+    catch (e) { return 'failed'; }
+  }
+  return { adif, file, toQRZ, BANDS };
+})();
+if (typeof module !== 'undefined') module.exports = QLOG;
+
+// Practice band: make-believe stations that call CQ and answer what the iPad sends, so the
+// whole automatic QSO can be rehearsed with no radio and no transmitting.
+// play(text, {tone, wpm, snr, ch}) must start a transmission and return its length in ms.
+const SIM = (function () {
+  const QSO_LEV = (a, b) => { const d = []; for (let i = 0; i <= a.length; i++) d[i] = [i]; for (let j = 1; j <= b.length; j++) d[0][j] = j; for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; };
+  const POOL = [
+    ['DL1ABC', 14, 'HANS', 'BERLIN'], ['F5XYZ', 14, 'JEAN', 'PARIS'], ['G4AAA', 14, 'JOHN', 'LONDON'], ['EA3ZZ', 14, 'JOSE', 'BARCELONA'],
+    ['OH2XX', 15, 'PEKKA', 'HELSINKI'], ['JA1ABC', 25, 'TARO', 'TOKYO'], ['PY2AA', 11, 'JOAO', 'SAO PAULO'], ['VK2DX', 30, 'BRUCE', 'SYDNEY'],
+    ['ZS6AB', 38, 'PIET', 'PRETORIA'], ['I2ABC', 15, 'MARCO', 'MILAN'], ['SP9XYZ', 15, 'JAN', 'KRAKOW'], ['OK1AA', 15, 'PETR', 'PRAGUE'],
+    ['LZ2BB', 20, 'IVAN', 'SOFIA'], ['UA3AA', 16, 'OLEG', 'MOSCOW'], ['4X4ZZ', 20, 'DAVID', 'HAIFA'], ['9A1A', 15, 'ANTE', 'ZAGREB'],
+    ['EI7XX', 14, 'SEAN', 'CORK'], ['ON4ZZ', 14, 'LUC', 'GENT'], ['PA3AAA', 14, 'JAN', 'UTRECHT'], ['HA5AA', 15, 'LASZLO', 'BUDAPEST'],
+    ['W1XYZ', 5, 'BILL', 'MAINE'], ['K5ABC', 4, 'TOM', 'TEXAS'], ['N4ZZ', 5, 'ED', 'OHIO'], ['W7AA', 3, 'JIM', 'OREGON'], ['KH6XX', 31, 'KEOLA', 'HONOLULU']
+  ];
+  class Band {
+    constructor(o) {
+      this.o = o; this.rnd = o.rnd || Math.random; this.my = o.my || 'KD9RDU';
+      this.setStyle(o.style || 'contest');
+    }
+    r(a, b) { return a + (b - a) * this.rnd(); }
+    pickFree(used) { let p; do { p = POOL[Math.floor(this.rnd() * POOL.length)]; } while (used.has(p[0])); used.add(p[0]); return p; }
+    setStyle(s) {
+      this.style = s; this.stations = []; this.callers = [];
+      const used = new Set(), n = s === 'contest' ? 4 : 3, now = this.o.now();
+      for (let i = 0; i < n; i++) {
+        const p = this.pickFree(used);
+        this.stations.push({ call: p[0], zone: p[1], name: p[2], qth: p[3], kind: s === 'contest' ? 'runner' : 'cqer',
+          tone: Math.round(450 + i * (1800 / n) + this.r(0, 200)), wpm: Math.round(s === 'contest' ? this.r(24, 32) : this.r(16, 24)),
+          snr: Math.round(this.r(12, 26)), state: 'idle', nextAt: now + this.r(500, 4000), busyUntil: 0, qso: null, ch: i + 100 });
+      }
+      this.used = used;
+    }
+    send(st, text, delay) {
+      const go = () => { const d = this.o.play(text, { tone: st.tone, wpm: st.wpm, snr: st.snr, ch: st.ch, call: st.call }); st.busyUntil = this.o.now() + d; return d; };
+      if (delay) { st.state = 'pending'; st.sendAt = this.o.now() + delay; st.sendText = text; return; }
+      return go();
+    }
+    tick() {
+      const now = this.o.now();
+      for (const st of this.stations.concat(this.callers)) {
+        if (st.state === 'pending' && now >= st.sendAt) { st.state = st.after || 'listen'; st.after = null; this.send(st, st.sendText); st.listenUntil = st.busyUntil + 2500; continue; }
+        if (now < st.busyUntil) continue;
+        if (st.kind === 'runner' || st.kind === 'cqer') {
+          if ((st.state === 'idle' && now >= st.nextAt) || (st.state === 'listen' && now > st.listenUntil)) {
+            if (st.kind === 'runner') {
+              st.qso = null;
+              if (this.rnd() < 0.2 && st.state === 'listen') {          // works somebody else now and then
+                const ph = POOL[Math.floor(this.rnd() * POOL.length)][0];
+                if (ph !== st.call) { this.send(st, `${ph} 5NN ${st.zone}`); st.state = 'idle'; st.nextAt = st.busyUntil + 1400; st.phantom = ph; continue; }
+              }
+              if (st.phantom) { this.send(st, `TU ${st.call} TEST`); st.phantom = null; st.state = 'listen'; st.listenUntil = st.busyUntil + 2200; continue; }
+              const v = [`CQ TEST ${st.call}`, `${st.call} TEST`, `CQ ${st.call} TEST`, `TEST ${st.call} ${st.call}`][Math.floor(this.rnd() * 4)];
+              this.send(st, v); st.state = 'listen'; st.listenUntil = st.busyUntil + 2200;
+            } else {
+              st.qso = null;
+              this.send(st, `CQ CQ CQ DE ${st.call} ${st.call} K`); st.state = 'listen'; st.listenUntil = st.busyUntil + 7000;
+            }
+          }
+        } else if (st.kind === 'caller' && now > (st.giveUpAt || 0)) {
+          this.callers = this.callers.filter(c => c !== st);
+        }
+      }
+    }
+    // We just started sending: a station listening near our tone waits for us to finish.
+    usStart(tone, durMs) {
+      const now = this.o.now();
+      for (const st of this.stations.concat(this.callers))
+        if (Math.abs(st.tone - tone) <= 80 && st.state === 'listen' && now >= st.busyUntil) { st.listenUntil = Math.max(st.listenUntil || 0, now + durMs + 1500); if (st.kind === 'caller') st.giveUpAt = Math.max(st.giveUpAt, now + durMs + 15000); }
+    }
+    // Our transmission just ended.
+    hearUs(text, tone) {
+      const now = this.o.now(), T = String(text).toUpperCase(), my = this.my;
+      for (const st of this.stations) {
+        if (Math.abs(st.tone - tone) > 80 || now < st.busyUntil || st.state === 'pending') continue;
+        if (st.kind === 'runner') {
+          if (!st.qso && T.includes(my) && !T.includes('5NN') && st.state === 'listen') {
+            const p = this.rnd();
+            if (p < 0.78) { st.qso = 'exch'; this.send(st, `${my} 5NN ${st.zone}`, this.r(250, 600)); }
+            else if (p < 0.88) { st.qso = 'part'; this.send(st, `${my.slice(0, 3)}?`, this.r(250, 600)); }
+            else if (p < 0.94) { st.qso = 'exch'; this.send(st, `${my.slice(0, 5)}V 5NN ${st.zone}`, this.r(250, 600)); }
+          } else if (st.qso === 'part' && T.includes(my)) {
+            st.qso = 'exch'; this.send(st, `${my} 5NN ${st.zone}`, this.r(250, 600));
+          } else if (st.qso === 'exch' && /5NN|599/.test(T)) {
+            if (this.rnd() < 0.85) { st.qso = null; this.send(st, `TU ${st.call} TEST`, this.r(200, 500)); }
+            else this.send(st, '?', this.r(200, 500));
+          }
+        } else if (st.kind === 'cqer') {
+          if (!st.qso && T.includes(st.call) && T.includes(my)) {
+            st.qso = 'report';
+            this.send(st, `${my} DE ${st.call} GM TNX FER CALL UR RST 579 579 NAME ${st.name} ${st.name} QTH ${st.qth} HW? ${my} DE ${st.call} KN`, this.r(800, 1500));
+          } else if (st.qso === 'report' && T.includes('RST')) {
+            st.qso = 'done';
+            this.send(st, `R TNX FB QSO 73 ${my} DE ${st.call} <SK> EE`, this.r(800, 1500));
+            st.after = 'idle'; st.nextAt = now + 25000;
+          }
+        }
+      }
+      // Our CQ: sometimes somebody answers
+      if (/\bCQ\b/.test(T) && T.includes(my) && this.rnd() < 0.75) {
+        const p = this.pickFree(this.used);
+        const c = { call: p[0], zone: p[1], name: p[2], qth: p[3], kind: 'caller', tone: Math.round(tone + this.r(-40, 40)),
+          wpm: Math.round(this.style === 'contest' ? this.r(24, 30) : this.r(16, 22)), snr: Math.round(this.r(10, 24)),
+          state: 'listen', busyUntil: 0, ch: 200 + this.callers.length, giveUpAt: now + 30000 };
+        this.callers.push(c);
+        this.send(c, this.style === 'contest' ? (this.rnd() < 0.5 ? c.call : `${c.call} ${c.call}`) : `${my} DE ${c.call} ${c.call} K`, this.r(400, 1200));
+      }
+      for (const c of this.callers) {
+        if (Math.abs(c.tone - tone) > 80 || c.state === 'pending') continue;
+        const close = T.split(/\s+/).some(w => w !== c.call && w.length >= 4 && QSO_LEV(w, c.call) <= 2);
+        if (!T.includes(c.call) && close && /5NN|599|RST/.test(T)) { this.send(c, `${c.call} ${c.call}`, this.r(300, 700)); continue; }
+        if (T.includes(c.call) && /5NN|599|RST/.test(T)) {
+          this.send(c, this.style === 'contest' ? `TU 5NN ${c.zone}` : `R ${my} DE ${c.call} TNX UR RST 589 589 NAME ${c.name} QTH ${c.qth} 73 <SK>`, this.r(300, 900));
+          c.giveUpAt = now + 60000;
+        }
+      }
+    }
+  }
+  return { Band, POOL };
+})();
+if (typeof module !== 'undefined') module.exports = SIM;
+</script>
+<script>
 {
 const $ = s => document.querySelector(s);
 const store = {
@@ -481,48 +1268,83 @@ const store = {
 };
 const S = {
   tone: store.get('tone', 650), auto: store.get('auto', true), bw: store.get('bw', 60), sq: store.get('sq', 9),
-  wpm: store.get('wpm', 0), size: store.get('size', 30), src: store.get('src', 'mic'), dev: store.get('dev', '')
+  wpm: store.get('wpm', 0), size: store.get('size', 30), src: store.get('src', 'mic'), dev: store.get('dev', ''),
+  my: Object.assign({ call: 'KD9RDU', name: 'BOB', qth: 'IL', zone: 4, wpm: 22, maxWpm: 32 }, store.get('my', {})),
+  style: store.get('style', 'contest'), band: store.get('band', '20m'), dial: store.get('dial', {}), txLevel: store.get('txLevel', 40),
+  askFirst: store.get('askFirst', false), needTwice: store.get('needTwice', true), qrzKey: store.get('qrzKey', ''), autoOpen: store.get('autoOpen', false)
 };
-const FMIN = 250, FMAX = 1350;
+if (S.src !== 'mic' && S.src !== 'practice') S.src = 'mic';
+const BANDS = ['40m', '20m', '17m', '15m', '12m', '10m', '6m'];                      // the bands Bob allows for automation
+const CWSEG = { '40m': [7025, 7125], '20m': [14025, 14150], '17m': [18068, 18110], '15m': [21025, 21200], '12m': [24890, 24930], '10m': [28000, 28300], '6m': [50000, 50100] };
+if (!BANDS.includes(S.band)) S.band = '20m';
+const swrOk = {};                          // per band, this session only
+let txOn = false, autoMode = 'off';
+let FMIN = 250, FMAX = 1350;
 const DSP_SRC = $('#dsp').textContent;
 const esc = t => String(t).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
-const els = { wpm: $('#wpm'), tone: $('#tone'), snr: $('#snr'), led: $('#led'), sq: $('#sq'), out: $('#out'), status: $('#status'), pill: $('#pill'), go: $('#go'), lvl: $('#lvl'), lvlTxt: $('#lvlTxt') };
+const els = { wpm: $('#wpm'), tone: $('#tone'), snr: $('#snr'), led: $('#led'), sq: $('#sq'), out: $('#out'), tr: $('#tr'), status: $('#status'), pill: $('#pill'), go: $('#go'), lvl: $('#lvl'), lvlTxt: $('#lvlTxt') };
 
-let ctx = null, an = null, proc = null, sink = null, src = null, stream = null, setEnv = () => {}, running = false, wake = null, inputName = '';
-let raf = 0, lastDraw = 0, lastKeyAt = 0, spec = null, smooth = null, hold = null, tbuf = null;
+let ctx = null, an = null, proc = null, sink = null, src = null, stream = null, post = () => {}, running = false, wake = null, inputName = '';
+let raf = 0, lastDraw = 0, lastKeyAt = 0, spec = null, smooth = null, hold = null, tbuf = null, practice = null, sim = null, simT = 0;
+let txActive = false, txEndAt = 0, txSrcNode = null, txResolve = null;
 
-const dec = new CWDecoder({
-  squelch: S.sq, fixedWpm: S.wpm,
-  onChar: addChar,
-  onKey: k => { els.led.classList.toggle('on', k); if (k) lastKeyAt = performance.now(); }
-});
+function status(html, live) { els.status.innerHTML = html; els.pill.classList.toggle('live', !!live); }
+function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('show'), 2200); }
+const muted = () => txActive || Date.now() < txEndAt + 300;
 
-/* keying trace: one entry per 5 ms decoder frame */
+/* ---------- channels: 0 is the tuned signal shown in the big copy; the rest are skimmed ---------- */
+const chans = new Map();
+let nextId = 1;
+const ch0 = new CWChannel(0, S.tone, { squelch: S.sq, style: () => S.style, muted,
+  onChar: (ch, c) => { if (!autoView()) addChar(c); }, onSegment: () => {} });
+const dec = ch0.dec;
+dec.fixedWpm = S.wpm || 0; if (S.wpm) dec.setFixedWpm(S.wpm);
+dec.onKey = k => { if (!txActive) els.led.classList.toggle('on', k); if (k) lastKeyAt = performance.now(); };
+chans.set(0, ch0);
+function newChan(tone, pinned) {
+  const id = nextId++;
+  const ch = new CWChannel(id, tone, { squelch: S.sq, style: () => S.style, muted,
+    onChar: () => {}, onSegment: (c, text) => onSegment(c, text) });
+  ch.seen = Date.now(); ch.pinned = !!pinned; ch.calls = [];
+  chans.set(id, ch); post({ set: [[id, tone]] });
+  return ch;
+}
+function delChan(id) { if (!id) return; chans.delete(id); post({ del: [id] }); }
+function skimmers() { return [...chans.values()].filter(c => c.id); }
+
+/* keying trace: one entry per 5 ms frame of channel 0 */
 const KN = 1600, kLvl = new Float32Array(KN), kThr = new Float32Array(KN), kKey = new Uint8Array(KN);
 let kIdx = 0;
-function feed(v) {
-  dec.push(v);
+function feed0(v) {
+  ch0.frame(v);
   if (dec.lastDb == null || dec.floor == null) return;
   kLvl[kIdx] = dec.lastDb - dec.floor; kThr[kIdx] = dec.lastThr - dec.floor; kKey[kIdx] = dec.state && dec.open ? 1 : 0;
   kIdx = (kIdx + 1) % KN;
 }
-
-function status(html, live) { els.status.innerHTML = html; els.pill.classList.toggle('live', !!live); }
-function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('show'), 1800); }
+function onFrames(b) {
+  for (const id in b) {
+    const ch = chans.get(+id); if (!ch) continue;
+    const a = b[id];
+    if (+id === 0) for (let i = 0; i < a.length; i++) feed0(a[i]);
+    else for (let i = 0; i < a.length; i++) ch.frame(a[i]);
+  }
+}
 
 /* signal meter segments */
 const meter = $('#meter');
 for (let i = 0; i < 24; i++) { const s = document.createElement('i'); s.style.setProperty('--c', i < 12 ? '#39e07a' : i < 19 ? '#d8e23a' : '#ff5a4f'); meter.appendChild(s); }
 function setMeter(db) { const n = Math.round(Math.max(0, Math.min(40, db)) / 40 * 24); [...meter.children].forEach((s, i) => s.classList.toggle('on', i < n)); }
 
-/* ---------- decoded text ---------- */
+/* ---------- decoded text (receive view) ---------- */
 let lines = store.get('lines', []);
 let cur = null, lastCharAt = 0, saveT = 0;
 const fmtTime = d => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-function lineEl(t, x) {
-  const d = document.createElement('div'); d.className = 'ln';
+function lineEl(t, x, cls, who) {
+  const d = document.createElement('div'); d.className = 'ln' + (cls ? ' ' + cls : '');
   const tm = document.createElement('time'); tm.textContent = t;
-  const sp = document.createElement('span'); sp.className = 'x'; sp.textContent = x;
+  const sp = document.createElement('span'); sp.className = 'x';
+  if (who) { const w = document.createElement('span'); w.className = 'who'; w.textContent = who; sp.appendChild(w); sp.appendChild(document.createTextNode(x)); }
+  else sp.textContent = x;
   d.append(tm, sp); return d;
 }
 function renderSaved() {
@@ -531,7 +1353,7 @@ function renderSaved() {
   for (const [t, x] of lines) els.out.appendChild(lineEl(t, x));
   els.out.scrollTop = els.out.scrollHeight;
 }
-function settle(x) { if (x && x.children.length) x.textContent = x.textContent; }   // fold the glowing letters back into plain text
+function settle(x) { if (x && x.querySelector('.n')) x.textContent = x.textContent; }
 function newLine() {
   const e = $('#empty'); if (e) e.remove();
   settle(cur);
@@ -556,7 +1378,157 @@ function addChar(c) {
   if (atBottom) els.out.scrollTop = els.out.scrollHeight;
   if (!saveT) saveT = setTimeout(() => { saveT = 0; store.set('lines', lines); }, 3000);
 }
-addEventListener('pagehide', () => store.set('lines', lines));
+addEventListener('pagehide', () => { store.set('lines', lines); });
+
+/* ---------- QSO transcript (auto view) ---------- */
+function trAdd(kind, who, text) {
+  const atBottom = els.tr.scrollHeight - els.tr.scrollTop - els.tr.clientHeight < 80;
+  els.tr.appendChild(lineEl(fmtTime(new Date()), text, kind, who));
+  while (els.tr.children.length > 250) els.tr.firstElementChild.remove();
+  if (atBottom) els.tr.scrollTop = els.tr.scrollHeight;
+}
+function autoView() { return S.autoOpen; }
+
+/* ---------- log ---------- */
+let qlog = store.get('log', []), plog = store.get('plog', []);
+const curLog = () => (S.src === 'practice' ? plog : qlog);
+function saveLog() { store.set('log', qlog.slice(-3000)); store.set('plog', plog.slice(-300)); }
+function onLog(q) {
+  q.band = S.band; q.practice = S.src === 'practice';
+  const dial = parseFloat(S.dial[S.band]);
+  if (dial && !q.practice) q.freq = (dial + (q.tone || 0) / 1000) / 1000;
+  q.when = new Date(q.when).toISOString(); q.qrz = q.practice ? 'practice' : (S.qrzKey ? 'sending' : 'no key');
+  curLog().push(q); saveLog();
+  trAdd('ev', '', `Logged ${q.call} on ${q.band}${q.srx ? ', zone ' + q.srx : ''}${q.name ? ', ' + q.name : ''}${q.qth ? ', ' + q.qth : ''}${q.practice ? ' (practice log)' : ''}`);
+  toast(`Logged ${q.call}`);
+  if (!q.practice && S.qrzKey) {
+    QLOG.toQRZ(Object.assign({}, q, { when: new Date(q.when) }), { call: S.my.call, grid: 'EN52XF' }, S.qrzKey)
+      .then(r => { q.qrz = r === 'sent' ? 'sent to QRZ' : 'QRZ failed'; saveLog(); renderLog(); });
+  }
+  renderLog();
+}
+function renderLog() {
+  const L = curLog(), box = $('#logList');
+  $('#logTitle').textContent = (S.src === 'practice' ? 'PRACTICE LOG ' : 'LOG ') + L.length;
+  box.textContent = '';
+  for (const q of L.slice(-40).reverse()) {
+    const r = document.createElement('div'); r.className = 'lg';
+    r.innerHTML = `<span>${esc(fmtTime(new Date(q.when)))}</span><span class="c">${esc(q.call)}</span><span>${esc(q.band || '')}</span><span class="q${q.qrz === 'sent to QRZ' ? ' ok' : ''}">${esc((q.srx ? 'z' + q.srx + ' ' : '') + q.qrz)}</span>`;
+    box.appendChild(r);
+  }
+}
+function exportAdif() {
+  const L = curLog(); if (!L.length) { toast('Nothing logged yet'); return; }
+  const txt = QLOG.file(L.map(q => Object.assign({}, q, { when: new Date(q.when) })), { call: S.my.call, grid: 'EN52XF' });
+  const name = `${S.my.call}-cw-${new Date().toISOString().slice(0, 10)}${S.src === 'practice' ? '-practice' : ''}.adi`;
+  const file = new File([txt], name, { type: 'text/plain' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file], title: name }).catch(() => {});
+  else { const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+}
+
+/* ---------- the QSO engine ---------- */
+function bandReason() {
+  if (S.src === 'practice') return '';
+  if (!running) return 'Start listening first.';
+  if (!txOn) return 'Transmit is off. Tick Transmit to go on the air.';
+  if (!swrOk[S.band]) return `Check SWR on ${S.band} and tick the SWR box first.`;
+  const dial = parseFloat(S.dial[S.band]);
+  if (dial) { const [a, b] = CWSEG[S.band]; if (dial < a - 0.5 || dial + 3 > b) return `${dial} kHz is outside the General CW segment (${a} to ${b} kHz).`; }
+  return '';
+}
+const canTx = () => autoMode !== 'off' && running && !bandReason();
+const eng = new QSO.Engine({
+  my: S.my, style: S.style, maxTries: 3, needTwice: S.needTwice, askFirst: S.askFirst,
+  now: () => Date.now(), band: () => (S.src === 'practice' ? 'P' + S.band : S.band), canTx,
+  send: (text, o) => transmit(text, o), log: onLog, event: onEvent, quietTone, toneIdleMs
+});
+function loadWorked() {
+  eng.worked.clear();
+  const since = Date.now() - 48 * 3600e3;
+  for (const q of qlog) if (new Date(q.when).getTime() > since) eng.markWorked(q.band, q.call);
+  for (const q of plog) if (new Date(q.when).getTime() > since) eng.markWorked('P' + q.band, q.call);
+}
+loadWorked();
+function onEvent(kind, text, x) {
+  if (kind === 'status') { setStat(text); return; }
+  if (kind === 'tx') { trAdd('tx', `${S.my.call} sends, ${x.wpm} WPM at ${Math.round(x.tone)} Hz`, text); return; }
+  if (kind === 'dry') { trAdd('dry', '', text); setStat(text); return; }
+  if (kind === 'propose') { const b = $('#callBtn'); b.textContent = `Call ${x.call}`; b.classList.add('show'); trAdd('dry', '', `${x.call} is calling CQ. Tap Call to answer.`); }
+}
+function setStat(t) {
+  const st = $('#astat'), why = $('#awhy'), cb = $('#callBtn');
+  st.firstChild.nodeValue = t;
+  const r = autoMode !== 'off' ? bandReason() : '';
+  why.textContent = r; st.append(why, cb);
+}
+function segWho(ch) { return `${ch.calls[0] || 'Signal'} at ${Math.round(ch.tone)} Hz, ${Math.round(ch.wpm)} WPM`; }
+function onSegment(ch, text) {
+  const r = QSO.analyze(text, S.my.call, eng.t && eng.t.call);
+  ch.cc = ch.cc || {};
+  for (const c of r.calls) if (QSO.lev(c, S.my.call) > 2) ch.cc[c] = (ch.cc[c] || 0) + r.counts[c] + (r.isCQ ? 2 : 0);
+  ch.calls = Object.keys(ch.cc).sort((a, b) => ch.cc[b] - ch.cc[a]).slice(0, 3);
+  if (r.isCQ && r.calls.length) ch.cqAt = Date.now();
+  const mine = eng.t && eng.t.ch === ch.id;
+  if (autoMode !== 'off' && (mine || r.myExact || r.myFuzzy || (eng.state === 'cq' && Math.abs(ch.tone - eng.cqTone) < 110))) trAdd('rx', segWho(ch), text);
+  eng.hear(ch.id, text, { tone: ch.tone, wpm: ch.wpm, snr: ch.snr });
+}
+function toneIdleMs(tone, w) { let m = Infinity; for (const c of skimmers()) if (Math.abs(c.tone - tone) <= w) m = Math.min(m, c.idleMs); return m; }
+function quietTone() {
+  let best = 800, bv = 1e9;
+  if (hold && an) {
+    for (let f = 500; f <= 1500; f += 25) {
+      let mx = -1e9; for (let i = Math.floor(binOf(f - 130)); i <= Math.ceil(binOf(f + 130)); i++) mx = Math.max(mx, hold[i]);
+      const v = mx + Math.abs(f - 800) / 100;
+      if (v < bv) { bv = v; best = f; }
+    }
+  }
+  pinCq(best);
+  return best;
+}
+function pinCq(tone) {
+  for (const c of skimmers()) if (c.pinned) delChan(c.id);
+  for (const o of [-60, -20, 20, 60]) newChan(tone + o, true);
+}
+
+/* transmit: a keyed tone; Practice keeps it inside the page */
+async function transmit(text, o) {
+  const wpm = o.wpm, tone = o.tone, dur = MORSE_TX.durationMs(text, wpm) + 60;
+  txActive = true; setOnAir(true);
+  for (const c of chans.values()) c.clear();
+  try {
+    if (S.src === 'practice') {
+      if (sim) sim.usStart(tone, dur);
+      await new Promise(res => { txResolve = res; setTimeout(res, dur); });
+      if (sim && autoMode !== 'off') sim.hearUs(text, tone);
+    } else {
+      if (!ctx || ctx.state !== 'running') throw new Error('audio stopped');
+      const x = MORSE_TX.render(text, { wpm, tone, rate: ctx.sampleRate, level: Math.min(1, S.txLevel / 100), lead: 12 });
+      const buf = ctx.createBuffer(1, x.length, ctx.sampleRate); buf.getChannelData(0).set(x);
+      const n = ctx.createBufferSource(); n.buffer = buf; n.connect(ctx.destination); txSrcNode = n;
+      await new Promise(res => { txResolve = res; n.onended = res; n.start(ctx.currentTime + 0.03); setTimeout(res, x.length / ctx.sampleRate * 1000 + 1500); });
+    }
+  } finally {
+    txSrcNode = null; txResolve = null; txActive = false; txEndAt = Date.now(); setOnAir(false);
+    setTimeout(() => { for (const c of chans.values()) c.clear(); }, 320);
+  }
+}
+function stopTx() {
+  try { if (txSrcNode) txSrcNode.stop(); } catch (e) {}
+  if (txResolve) txResolve();
+}
+function setOnAir(on) {
+  $('#onair').classList.toggle('on', on && S.src !== 'practice'); $('#onair').classList.toggle('prac', on && S.src === 'practice');
+  $('#onair').textContent = S.src === 'practice' ? 'SENDING' : 'ON AIR';
+  els.led.classList.toggle('tx', on); els.led.classList.remove('on');
+  els.sq.classList.toggle('tx', on);
+  if (on) els.sq.textContent = S.src === 'practice' ? 'sending (practice)' : 'ON AIR';
+}
+function stopAll(why) {
+  stopTx(); eng.stop(); autoMode = 'off'; markMode();
+  $('#callBtn').classList.remove('show');
+  if (why) trAdd('ev', '', why);
+}
+setInterval(() => { eng.tick(); }, 100);
 
 /* ---------- audio ---------- */
 async function makeProc() {
@@ -564,62 +1536,65 @@ async function makeProc() {
     if (!ctx.audioWorklet || !window.AudioWorkletNode) throw new Error('no worklet');
     const code = DSP_SRC + `
 class P extends AudioWorkletProcessor {
-  constructor(o) { super(); this.e = new CWEnvelope(sampleRate, o.processorOptions); this.b = []; this.m = new Float32Array(128);
-    this.port.onmessage = m => { const d = m.data; if (d.tone) this.e.setTone(d.tone); if (d.bw) this.e.setBandwidth(d.bw); }; }
+  constructor(o) { super(); this.bw = o.processorOptions.bw; this.es = new Map(); this.b = {}; this.n = 0; this.m = new Float32Array(128);
+    this.port.onmessage = m => { const d = m.data;
+      if (d.set) for (const [id, tone] of d.set) { const e = this.es.get(id); if (e) e.setTone(tone); else { this.es.set(id, new CWEnvelope(sampleRate, { tone, bw: this.bw })); this.b[id] = []; } }
+      if (d.del) for (const id of d.del) { this.es.delete(id); delete this.b[id]; }
+      if (d.bw) { this.bw = d.bw; for (const e of this.es.values()) e.setBandwidth(d.bw); } }; }
   process(i) {
     const ch = i[0]; if (!ch || !ch.length) return true;
     let x = ch[0];
     if (ch.length > 1) { if (this.m.length !== x.length) this.m = new Float32Array(x.length);
       for (let k = 0; k < x.length; k++) this.m[k] = 0.5 * (ch[0][k] + ch[1][k]); x = this.m; }
-    this.e.process(x, v => this.b.push(v));
-    if (this.b.length >= 4) { this.port.postMessage(this.b); this.b = []; }
+    for (const [id, e] of this.es) { const a = this.b[id]; e.process(x, v => a.push(v)); }
+    if (++this.n >= 6) { this.n = 0; this.port.postMessage(this.b); const nb = {}; for (const k in this.b) nb[k] = []; this.b = nb; }
     return true; }
 }
 registerProcessor('cw-env', P);`;
     const url = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
     await ctx.audioWorklet.addModule(url);
-    proc = new AudioWorkletNode(ctx, 'cw-env', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { tone: S.tone, bw: S.bw } });
-    proc.port.onmessage = e => { for (const v of e.data) feed(v); };
-    setEnv = m => proc.port.postMessage(m);
+    proc = new AudioWorkletNode(ctx, 'cw-env', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { bw: S.bw } });
+    proc.port.onmessage = e => onFrames(e.data);
+    post = m => proc.port.postMessage(m);
   } catch (err) {
     const Env = new Function(DSP_SRC + '; return CWEnvelope;')();
-    const env = new Env(ctx.sampleRate, { tone: S.tone, bw: S.bw });
-    let mix = new Float32Array(2048);
+    const es = new Map(); let bw = S.bw, mix = new Float32Array(2048);
     proc = ctx.createScriptProcessor(2048, 2, 1);
     proc.onaudioprocess = ev => {
       const b = ev.inputBuffer; let x = b.getChannelData(0);
       if (b.numberOfChannels > 1) { const y = b.getChannelData(1); if (mix.length !== x.length) mix = new Float32Array(x.length);
         for (let k = 0; k < x.length; k++) mix[k] = 0.5 * (x[k] + y[k]); x = mix; }
-      env.process(x, v => feed(v));
+      const out = {};
+      for (const [id, e] of es) { const a = out[id] = []; e.process(x, v => a.push(v)); }
+      onFrames(out);
     };
-    setEnv = m => { if (m.tone) env.setTone(m.tone); if (m.bw) env.setBandwidth(m.bw); };
+    post = m => {
+      if (m.set) for (const [id, tone] of m.set) { const e = es.get(id); if (e) e.setTone(tone); else es.set(id, new Env(ctx.sampleRate, { tone, bw })); }
+      if (m.del) for (const id of m.del) es.delete(id);
+      if (m.bw) { bw = m.bw; for (const e of es.values()) e.setBandwidth(m.bw); }
+    };
   }
 }
 
-function testBuffer(rate) {
-  // A practice signal: 20 WPM at 650 Hz in light noise, about a minute long, looping.
-  const T = { A: '.-', B: '-...', C: '-.-.', D: '-..', E: '.', F: '..-.', G: '--.', H: '....', I: '..', J: '.---', K: '-.-', L: '.-..', M: '--', N: '-.', O: '---', P: '.--.', Q: '--.-', R: '.-.', S: '...', T: '-', U: '..-', V: '...-', W: '.--', X: '-..-', Y: '-.--', Z: '--..', 0: '-----', 1: '.----', 2: '..---', 3: '...--', 4: '....-', 5: '.....', 6: '-....', 7: '--...', 8: '---..', 9: '----.', '=': '-...-', '?': '..--..', '/': '-..-.' };
-  const text = 'CQ CQ CQ DE N0CALL N0CALL K = THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG = 73 ES GL DE N0CALL';
-  const u = 1200 / 20, segs = [[0, 800]];
-  text.split(' ').forEach((w, wi, ws) => {
-    [...w].forEach((ch, ci) => {
-      [...T[ch]].forEach((e, ei, a) => { segs.push([1, e === '.' ? u : 3 * u]); if (ei < a.length - 1) segs.push([0, u]); });
-      if (ci < w.length - 1) segs.push([0, 3 * u]);
-    });
-    segs.push([0, wi < ws.length - 1 ? 7 * u : 2500]);
-  });
-  const total = segs.reduce((a, s) => a + s[1], 0), n = Math.ceil(total / 1000 * rate);
-  const buf = ctx.createBuffer(1, n, rate), x = buf.getChannelData(0);
-  let seed = 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-  const w = 2 * Math.PI * 650 / rate, rise = 0.005 * rate; let i = 0, env = 0;
-  for (const [on, ms] of segs) {
-    const m = Math.round(ms / 1000 * rate);
-    for (let k = 0; k < m && i < n; k++, i++) {
-      env = Math.max(0, Math.min(1, env + (on ? 1 : -1) / rise));
-      x[i] = 0.08 * (0.5 - 0.5 * Math.cos(Math.PI * env)) * Math.sin(w * i) + 0.06 * (rnd() + rnd() + rnd() - 1.5);
-    }
-  }
-  return buf;
+/* Practice band: make-believe stations rendered into the receive chain, nothing to the speaker or radio */
+function startPractice() {
+  const rate = ctx.sampleRate, bus = ctx.createGain(), sigma = 0.02;
+  const nb = ctx.createBuffer(1, rate * 4, rate), nd = nb.getChannelData(0);
+  let seed = 99; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  for (let i = 0; i < nd.length; i++) { let u = rnd() || 1e-9; nd[i] = sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(6.283 * rnd()); }
+  const noise = ctx.createBufferSource(); noise.buffer = nb; noise.loop = true; noise.connect(bus); noise.start();
+  const play = (text, o) => {
+    const amp = Math.sqrt(2 * sigma * sigma * (2500 / (rate / 2)) * Math.pow(10, o.snr / 10));
+    const x = MORSE_TX.render(text, { wpm: o.wpm, tone: o.tone, rate, level: amp });
+    const b = ctx.createBuffer(1, x.length, rate); b.getChannelData(0).set(x);
+    const n = ctx.createBufferSource(); n.buffer = b; n.connect(bus); n.start();
+    return x.length / rate * 1000;
+  };
+  sim = new SIM.Band({ now: () => Date.now(), play, style: S.style, my: S.my.call });
+  simT = setInterval(() => sim && sim.tick(), 50);
+  practice = { bus, noise };
+  inputName = 'the practice band';
+  return bus;
 }
 
 async function start() {
@@ -633,10 +1608,8 @@ async function start() {
     an = ctx.createAnalyser(); an.fftSize = 8192; an.smoothingTimeConstant = 0;
     sink = ctx.createGain(); sink.gain.value = 0; sink.connect(ctx.destination);
     await makeProc();
-    if (S.src === 'test') {
-      src = ctx.createBufferSource(); src.buffer = testBuffer(ctx.sampleRate); src.loop = true; src.start();
-      inputName = 'the practice signal';
-    } else {
+    if (S.src === 'practice') src = startPractice();
+    else {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error('nomic'), { name: 'NoMic' });
       const c = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
       try { stream = await navigator.mediaDevices.getUserMedia({ audio: S.dev ? Object.assign({ deviceId: { exact: S.dev } }, c) : c }); }
@@ -652,11 +1625,14 @@ async function start() {
     spec = new Float32Array(nb); smooth = new Float32Array(nb).fill(-140); hold = new Float32Array(nb).fill(-200); tbuf = new Float32Array(an.fftSize);
     ctx.onstatechange = () => { if (running && ctx && ctx.state !== 'running') interrupted(); };
     dec.reset(); kLvl.fill(0); kThr.fill(0); kKey.fill(0);
-    setTone(S.tone, true); setEnv({ bw: S.bw });
+    for (const c of skimmers()) delChan(c.id);
+    post({ set: [[0, S.tone]] });
+    setTone(S.tone, true);
     running = true;
     els.go.textContent = 'Stop'; els.go.classList.add('live');
     await keepAwake();
     showListening();
+    applyView();
     raf = requestAnimationFrame(frame);
   } catch (err) {
     let e = err;
@@ -664,29 +1640,34 @@ async function start() {
     if (S.src === 'mic' && window.top !== window.self && e.name === 'NotAllowedError') e = { name: 'NoMic' };
     const why = {
       NotAllowedError: 'Audio access was declined. In Safari tap <b>aA</b>, <b>Website Settings</b>, set Microphone to <b>Allow</b>, then try again.',
-      NoMic: 'This page cannot reach the audio input here. Open <b>rberg1869-commits.github.io/cw-decoder</b> directly in Safari, or choose <b>Test</b>.',
-      NotFoundError: 'No audio input was found. Check the Saramonic is plugged in.'
+      NoMic: 'This page cannot reach the audio input here. Open <b>rberg1869-commits.github.io/cw-decoder</b> directly in Safari, or choose <b>Practice</b>.',
+      NotFoundError: 'No audio input was found. Check the cable or SignaLink is plugged in.'
     };
     status(why[e.name] || ('Could not start audio: ' + esc(e.message || e.name)));
   } finally { els.go.disabled = false; }
 }
 
 function stop() {
+  if (autoMode !== 'off') stopAll('Stopped listening, so Auto stopped.');
   running = false; cancelAnimationFrame(raf);
-  try { if (src && src.stop) src.stop(); } catch (e) {}
+  clearInterval(simT); simT = 0; sim = null;
+  try { if (practice) practice.noise.stop(); } catch (e) {}
+  practice = null;
   if (stream) stream.getTracks().forEach(t => t.stop());
   if (ctx) ctx.close().catch(() => {});
-  ctx = an = proc = sink = src = stream = null;
+  ctx = an = proc = sink = src = stream = null; post = () => {};
   if (wake) wake.release().catch(() => {}); wake = null;
   els.go.textContent = 'Start listening'; els.go.classList.remove('live');
   els.led.classList.remove('on'); els.lvl.style.width = '0'; els.lvlTxt.textContent = 'off';
   els.wpm.innerHTML = '--<small>WPM</small>'; els.snr.innerHTML = '--<small>dB</small>';
   els.wpm.classList.add('dim'); els.snr.classList.add('dim'); setMeter(0);
   els.sq.textContent = 'squelch closed'; els.sq.classList.remove('open');
+  $('#marks').textContent = '';
   status('Stopped. Tap <b>Start listening</b> to begin again.');
+  setStat(autoMode === 'off' ? 'Auto is off.' : '');
 }
 
-function interrupted() { if (running) { $('#resume').classList.add('show'); status('The iPad paused the audio. Tap to resume.'); } }
+function interrupted() { if (running) { if (autoMode !== 'off') stopAll('The iPad paused the audio, so Auto stopped.'); $('#resume').classList.add('show'); status('The iPad paused the audio. Tap to resume.'); } }
 async function resumeAll() { $('#resume').classList.remove('show'); stop(); await start(); }
 
 async function keepAwake() {
@@ -698,7 +1679,7 @@ function showListening() {
   status(`Listening to <b>${esc(inputName)}</b>` + (wake ? ' &middot; screen stays on' : ' &middot; set Auto-Lock to Never'), true);
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') store.set('lines', lines);
+  if (document.visibilityState === 'hidden') { store.set('lines', lines); if (autoMode !== 'off') stopAll('The page went to the background, so Auto stopped.'); }
   if (document.visibilityState === 'visible' && running) {
     if (!wake) keepAwake();
     if (ctx && ctx.state !== 'running') ctx.resume().then(() => $('#resume').classList.remove('show')).catch(interrupted);
@@ -715,7 +1696,7 @@ async function listDevices() {
   } catch (e) {}
 }
 
-/* ---------- scope: spectrum, waterfall, keying trace ---------- */
+/* ---------- scope: spectrum, waterfall, keying trace, signal tags ---------- */
 const sp = $('#sp'), wf = $('#wf'), kt = $('#kt');
 const gsp = sp.getContext('2d'), gwf = wf.getContext('2d'), gkt = kt.getContext('2d');
 const LUT = (() => {   // SDR style colour ramp: navy, blue, cyan, green, yellow, red, white
@@ -730,16 +1711,17 @@ const LUT = (() => {   // SDR style colour ramp: navy, blue, cyan, green, yellow
 })();
 const dpr = () => window.devicePixelRatio || 1;
 function fit(cv) { const r = cv.getBoundingClientRect(), d = dpr(); cv.width = Math.max(1, Math.round(r.width * d)); cv.height = Math.max(1, Math.round(r.height * d)); }
-function sizeAll() {
+function sizeAll(keep) {
   const old = document.createElement('canvas'); old.width = wf.width; old.height = wf.height; old.getContext('2d').drawImage(wf, 0, 0);
   fit(sp); fit(kt); fit(wf);
   gwf.fillStyle = '#02060d'; gwf.fillRect(0, 0, wf.width, wf.height);
-  if (old.width > 1 && old.height > 1) gwf.drawImage(old, 0, 0, old.width, old.height, 0, 0, wf.width, old.height);   // keep the history when the iPad rotates
+  if (keep !== false && old.width > 1 && old.height > 1) gwf.drawImage(old, 0, 0, old.width, old.height, 0, 0, wf.width, old.height);   // keep the history when the iPad rotates
   const sc = $('#scale'); sc.textContent = '';
-  for (let f = 300; f <= 1300; f += 100) { const s = document.createElement('span'); s.style.left = xPct(f) + '%'; s.textContent = f % 200 === 0 || f === 300 ? f : ''; sc.appendChild(s); }
+  const wide = FMAX - FMIN > 1500, step = wide ? 200 : 100;
+  for (let f = Math.ceil(FMIN / step) * step; f <= FMAX; f += step) { const s = document.createElement('span'); s.style.left = xPct(f) + '%'; s.textContent = wide ? (f % 400 === 0 ? f : '') : (f % 200 === 0 || f === 300 ? f : ''); sc.appendChild(s); }
   placeBand(); drawIdle();
 }
-const ro = new ResizeObserver(sizeAll); ro.observe($('#scope'));
+const ro = new ResizeObserver(() => sizeAll()); ro.observe($('#scope'));
 function xPct(f) { return (f - FMIN) / (FMAX - FMIN) * 100; }
 function placeBand() {
   const b = $('#band'), w = Math.max(S.bw, 30);
@@ -748,7 +1730,8 @@ function placeBand() {
 function drawGrid(g, W, H) {
   g.strokeStyle = 'rgba(120,160,200,.08)'; g.lineWidth = 1;
   g.beginPath();
-  for (let f = 300; f <= 1300; f += 100) { const x = Math.round(xPct(f) / 100 * W) + .5; g.moveTo(x, 0); g.lineTo(x, H); }
+  const step = FMAX - FMIN > 1500 ? 200 : 100;
+  for (let f = Math.ceil(FMIN / step) * step; f <= FMAX; f += step) { const x = Math.round(xPct(f) / 100 * W) + .5; g.moveTo(x, 0); g.lineTo(x, H); }
   for (let y = 1; y < 4; y++) { const yy = Math.round(H * y / 4) + .5; g.moveTo(0, yy); g.lineTo(W, yy); }
   g.stroke();
 }
@@ -758,7 +1741,18 @@ function drawIdle() {
   gkt.fillStyle = '#050a12'; gkt.fillRect(0, 0, kt.width, kt.height);
 }
 function binOf(f) { return f * an.fftSize / ctx.sampleRate; }
+function applyView() {
+  const wide = S.autoOpen || S.src === 'practice';
+  const lo = wide ? 200 : 250, hi = wide ? 2800 : 1350;
+  if (lo !== FMIN || hi !== FMAX) { FMIN = lo; FMAX = hi; sizeAll(false); }
+  $('#work').classList.toggle('on', S.autoOpen); $('#app').classList.toggle('autov', S.autoOpen);
+  els.out.hidden = S.autoOpen; els.tr.hidden = !S.autoOpen;
+  $('#autoBtn').setAttribute('aria-pressed', S.autoOpen);
+  if (!S.autoOpen && autoMode !== 'off') stopAll('Auto panel closed, so Auto stopped.');
+  renderLog(); renderSignals();
+}
 
+let lastManage = 0;
 function frame(t) {
   raf = requestAnimationFrame(frame);
   if (!an) return;
@@ -766,13 +1760,13 @@ function frame(t) {
   if (t - lastDraw < 50) return;
   lastDraw = t;
   an.getFloatFrequencyData(spec);
-  const b0 = Math.floor(binOf(FMIN)), b1 = Math.ceil(binOf(FMAX));
+  const b0 = Math.max(1, Math.floor(binOf(FMIN))), b1 = Math.ceil(binOf(Math.max(FMAX, 2800)));
   for (let i = b0; i <= b1; i++) { const v = isFinite(spec[i]) ? spec[i] : -160; smooth[i] += (v - smooth[i]) * 0.35; hold[i] = Math.max(v, hold[i] - 0.6); }
-  const band = Array.prototype.slice.call(spec, b0, b1).sort((a, b) => a - b);
+  const vb0 = Math.floor(binOf(FMIN)), vb1 = Math.ceil(binOf(FMAX));
+  const band = Array.prototype.slice.call(spec, vb0, vb1).sort((a, b) => a - b);
   const med = band[band.length >> 1];
   const valAt = (arr, x, W) => { const bin = binOf(FMIN + (FMAX - FMIN) * x / W), i = Math.floor(bin), fr = bin - i; return arr[i] * (1 - fr) + arr[Math.min(i + 1, arr.length - 1)] * fr; };
 
-  // spectrum trace with filled glow
   const W = sp.width, H = sp.height;
   gsp.fillStyle = '#040911'; gsp.fillRect(0, 0, W, H); drawGrid(gsp, W, H);
   const lo = med - 8, hi = med + 52;
@@ -783,7 +1777,6 @@ function frame(t) {
   gsp.fillStyle = gr; gsp.fill();
   gsp.lineWidth = Math.max(1, dpr()); gsp.strokeStyle = '#7fe0ff'; gsp.stroke();
 
-  // waterfall row
   const WW = wf.width, rowH = Math.max(1, Math.round(dpr()));
   gwf.drawImage(wf, 0, 0, WW, wf.height - rowH, 0, rowH, WW, wf.height - rowH);
   const img = gwf.createImageData(WW, 1), px = img.data;
@@ -794,17 +1787,18 @@ function frame(t) {
   }
   for (let r = 0; r < rowH; r++) gwf.putImageData(img, 0, r);
 
-  // auto tone: strongest steady peak
+  // auto tone for channel 0: strongest steady peak in the view
   let pk = -1, pv = -1e9;
-  const a0 = Math.floor(binOf(300)), a1 = Math.ceil(binOf(1200));
+  const a0 = Math.floor(binOf(Math.max(300, FMIN + 50))), a1 = Math.ceil(binOf(Math.min(FMAX - 50, 2600)));
   for (let i = a0; i <= a1; i++) if (hold[i] > pv) { pv = hold[i]; pk = i; }
-  if (S.auto && pk > 0 && pv - med > 14) {
+  if (S.auto && pk > 0 && pv - med > 14 && !txActive) {
     const y0 = hold[pk - 1], y1 = hold[pk], y2 = hold[pk + 1], den = y0 - 2 * y1 + y2;
     const f = (pk + (den ? 0.5 * (y0 - y2) / den : 0)) * ctx.sampleRate / an.fftSize;
     const idle = performance.now() - lastKeyAt > 2500;
     if (idle && Math.abs(f - S.tone) > 12) setTone(f);
     else if (Math.abs(f - S.tone) < 40 && Math.abs(f - S.tone) > 2) setTone(S.tone + 0.2 * (f - S.tone));
   }
+  if (t - lastManage > 500 && S.autoOpen) { lastManage = t; manageChannels(); renderSignals(); }
   // input level
   an.getFloatTimeDomainData(tbuf);
   let ss = 0; for (let i = 0; i < tbuf.length; i++) ss += tbuf[i] * tbuf[i];
@@ -817,7 +1811,53 @@ function frame(t) {
   els.snr.innerHTML = (open ? sig : '--') + '<small>dB</small>';
   els.wpm.classList.toggle('dim', !open); els.snr.classList.toggle('dim', !open);
   setMeter(sig);
-  els.sq.textContent = open ? 'copying' : 'squelch closed'; els.sq.classList.toggle('open', open);
+  if (!txActive) { els.sq.textContent = open ? 'copying' : 'squelch closed'; els.sq.classList.toggle('open', open); }
+}
+
+/* skimmer: give each signal in the passband its own decoder */
+function manageChannels() {
+  const now = Date.now(), binHz = ctx.sampleRate / an.fftSize;
+  const peaks = findPeaks(hold, binHz, 260, 2750, { snr: 15, sep: 70, max: 10 });
+  const prev = manageChannels.prev || []; manageChannels.prev = peaks.map(p => p.tone);
+  const target = eng.t && eng.t.ch;
+  for (const p of peaks) {
+    let best = null, bd = 1e9;
+    for (const c of skimmers()) { const d = Math.abs(c.tone - p.tone); if (d < bd) { bd = d; best = c; } }
+    if (best && bd <= 28) {
+      best.seen = now;
+      if (bd > 6 && best.id !== target && !best.pinned && best.idleMs > 600) { best.tone += 0.35 * (p.tone - best.tone); post({ set: [[best.id, best.tone]] }); }
+      continue;
+    }
+    if (!prev.some(f => Math.abs(f - p.tone) < 25)) continue;          // must show up two looks in a row
+    const sk = skimmers();
+    if (sk.filter(c => !c.pinned).length >= 10) {
+      const old = sk.filter(c => !c.pinned && c.id !== target).sort((a, b) => a.seen - b.seen)[0];
+      if (!old || now - old.seen < 4000) continue;
+      delChan(old.id);
+    }
+    newChan(p.tone);
+  }
+  for (const c of skimmers()) if (!c.pinned && c.id !== target && (now - c.seen > 25000 || (now - c.seen > 8000 && !c.text.trim()))) delChan(c.id);
+}
+function renderSignals() {
+  const box = $('#sgList'); if (!box) return;
+  const list = skimmers().filter(c => c.calls.length).sort((a, b) => a.tone - b.tone);
+  $('#sgN').textContent = running ? list.length : '';
+  box.textContent = '';
+  const marks = $('#marks'); marks.textContent = '';
+  const tgt = eng.t && eng.t.ch, now = Date.now();
+  for (const c of list) {
+    const call = c.calls[0] || '', cq = c.cqAt && now - c.cqAt < 30000, dup = call && eng.isDupe(call);
+    const r = document.createElement('div'); r.className = 'sg' + (cq ? ' cq' : '') + (c.id === tgt ? ' tg' : '');
+    r.innerHTML = `<span class="t">${Math.round(c.tone)}</span><span class="c">${esc(call || '-')}</span><span class="w">${c.dec.open || c.text ? Math.round(c.wpm) : ''}</span><span class="s">${esc(c.text.trim().slice(-48))}</span>`;
+    box.appendChild(r);
+    if (call && c.tone > FMIN && c.tone < FMAX) {
+      const m = document.createElement('span'); m.className = 'mk' + (cq ? ' cq' : '') + (c.id === tgt ? ' tg' : '') + (dup ? ' dup' : '');
+      m.style.left = xPct(c.tone) + '%'; m.style.top = (4 + (list.indexOf(c) % 3) * 17) + 'px'; m.textContent = call;
+      marks.appendChild(m);
+    }
+  }
+  if (!list.length) box.innerHTML = `<div class="sg"><span></span><span class="c">-</span><span></span><span class="s">${running ? 'No CW signals yet' : 'Start listening'}</span></div>`;
 }
 
 function drawKeying() {
@@ -836,9 +1876,9 @@ function drawKeying() {
 }
 
 function setTone(f, force) {
-  f = Math.round(Math.max(300, Math.min(1300, f)));
+  f = Math.round(Math.max(300, Math.min(2700, f)));
   if (!force && f === S.tone) return;
-  S.tone = f; els.tone.innerHTML = f + '<small>Hz</small>'; placeBand(); setEnv({ tone: f });
+  S.tone = f; ch0.tone = f; els.tone.innerHTML = f + '<small>Hz</small>'; placeBand(); post({ set: [[0, f]] });
   clearTimeout(setTone.t); setTone.t = setTimeout(() => store.set('tone', S.tone), 1000);
 }
 function setAuto(on) { S.auto = on; store.set('auto', on); $('#tAuto').setAttribute('aria-pressed', on); }
@@ -858,45 +1898,116 @@ $('#scope').addEventListener('pointerdown', e => {
 els.go.addEventListener('click', () => (running ? stop() : start()));
 $('#resumeBtn').addEventListener('click', resumeAll);
 function setSrc(s) {
+  if (s === S.src) return;
+  if (autoMode !== 'off') stopAll('Source changed, so Auto stopped.');
   S.src = s; store.set('src', s);
-  $('#srcMic').setAttribute('aria-pressed', s === 'mic'); $('#srcTest').setAttribute('aria-pressed', s === 'test');
+  $('#srcMic').setAttribute('aria-pressed', s === 'mic'); $('#srcTest').setAttribute('aria-pressed', s === 'practice');
+  renderLog(); applyView();
   if (running) { stop(); start(); }
 }
 $('#srcMic').addEventListener('click', () => setSrc('mic'));
-$('#srcTest').addEventListener('click', () => setSrc('test'));
+$('#srcTest').addEventListener('click', () => setSrc('practice'));
 $('#tAuto').addEventListener('click', () => setAuto(!S.auto));
 $('#tDn').addEventListener('click', () => { setAuto(false); setTone(S.tone - 10); });
 $('#tUp').addEventListener('click', () => { setAuto(false); setTone(S.tone + 10); });
 document.querySelectorAll('[data-bw]').forEach(b => b.addEventListener('click', () => {
-  S.bw = +b.dataset.bw; store.set('bw', S.bw); setEnv({ bw: S.bw }); placeBand(); markBw();
+  S.bw = +b.dataset.bw; store.set('bw', S.bw); post({ bw: S.bw }); placeBand(); markBw();
 }));
 function markBw() { document.querySelectorAll('[data-bw]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.bw === S.bw)); }
 function setSize(px) { S.size = Math.max(16, Math.min(64, px)); store.set('size', S.size); document.documentElement.style.setProperty('--size', S.size + 'px'); }
 $('#aDn').addEventListener('click', () => setSize(S.size - 4));
 $('#aUp').addEventListener('click', () => setSize(S.size + 4));
 $('#copyBtn').addEventListener('click', async () => {
-  const txt = lines.map(l => l[0] + '  ' + l[1]).join('\n');
-  try { await navigator.clipboard.writeText(txt); toast('Copied ' + lines.length + ' lines'); } catch (e) { toast('Copy was blocked'); }
+  const txt = S.autoOpen ? [...els.tr.querySelectorAll('.ln')].map(l => l.textContent).join('\n') : lines.map(l => l[0] + '  ' + l[1]).join('\n');
+  try { await navigator.clipboard.writeText(txt); toast('Copied'); } catch (e) { toast('Copy was blocked'); }
 });
 let clearArm = 0;
 $('#clearBtn').addEventListener('click', e => {
   if (Date.now() - clearArm > 3000) { clearArm = Date.now(); e.currentTarget.textContent = 'Tap again'; setTimeout(() => { $('#clearBtn').textContent = 'Clear'; }, 3000); return; }
-  lines = []; cur = null; store.set('lines', []); els.out.textContent = ''; $('#clearBtn').textContent = 'Clear'; clearArm = 0;
+  if (S.autoOpen) els.tr.textContent = '';
+  else { lines = []; cur = null; store.set('lines', []); els.out.textContent = ''; }
+  $('#clearBtn').textContent = 'Clear'; clearArm = 0;
 });
 const sqr = $('#sqr'), spd = $('#spd');
 function showSq() { $('#sqv').textContent = S.sq; }
 function showSpd() { $('#spdv').textContent = S.wpm ? 'locked at ' + S.wpm + ' WPM (slide to 0 for automatic)' : 'automatic'; }
 sqr.value = S.sq; spd.value = S.wpm; showSq(); showSpd();
-sqr.addEventListener('input', () => { S.sq = +sqr.value; dec.squelch = S.sq; store.set('sq', S.sq); showSq(); });
+sqr.addEventListener('input', () => { S.sq = +sqr.value; for (const c of chans.values()) c.dec.squelch = S.sq; store.set('sq', S.sq); showSq(); });
 spd.addEventListener('input', () => { S.wpm = spd.value < 5 ? 0 : +spd.value; dec.setFixedWpm(S.wpm); store.set('wpm', S.wpm); showSpd(); });
+$('#dev').addEventListener('change', e => { S.dev = e.target.value; store.set('dev', S.dev); if (running && S.src === 'mic') { stop(); start(); } });
 $('#doneMore').addEventListener('click', () => { $('#moreBox').open = false; });
 $('#out').addEventListener('pointerdown', () => { $('#moreBox').open = false; });
-$('#dev').addEventListener('change', e => { S.dev = e.target.value; store.set('dev', S.dev); if (running && S.src === 'mic') { stop(); start(); } });
+
+/* station settings */
+const bindTxt = (id, key, up) => { const el = $(id); el.value = S.my[key]; el.addEventListener('change', () => { let v = el.value.trim(); if (up) v = v.toUpperCase().replace(/[^A-Z0-9\/ ]/g, ''); if (key === 'zone' || key === 'maxWpm' || key === 'wpm') v = Math.max(1, Math.min(key === 'zone' ? 40 : 40, parseInt(v, 10) || S.my[key])); S.my[key] = v; el.value = v; store.set('my', S.my); }); };
+bindTxt('#myCall', 'call', true); bindTxt('#myName', 'name', true); bindTxt('#myQth', 'qth', true); bindTxt('#myZone', 'zone'); bindTxt('#maxWpm', 'maxWpm'); bindTxt('#cqWpm', 'wpm');
+const txl = $('#txLvl'); txl.value = S.txLevel; $('#txLv').textContent = S.txLevel + '%';
+txl.addEventListener('input', () => { S.txLevel = +txl.value; $('#txLv').textContent = S.txLevel + '%'; store.set('txLevel', S.txLevel); });
+$('#vvvBtn').addEventListener('click', async () => {
+  if (S.src === 'practice') { toast('Switch Source to Radio for a level test'); return; }
+  const r = bandReason(); if (r) { toast(r); return; }
+  trAdd('tx', `${S.my.call} level test`, `VVV VVV DE ${S.my.call}`);
+  await transmit(`VVV VVV DE ${S.my.call}`, { wpm: 20, tone: S.tone });
+});
+const af = $('#askFirst'), nt = $('#needTwice'), qk = $('#qrzKey');
+af.checked = S.askFirst; nt.checked = S.needTwice; qk.value = S.qrzKey;
+af.addEventListener('change', () => { S.askFirst = eng.askFirst = af.checked; store.set('askFirst', S.askFirst); });
+nt.addEventListener('change', () => { S.needTwice = eng.needTwice = nt.checked; store.set('needTwice', S.needTwice); });
+qk.addEventListener('change', () => { S.qrzKey = qk.value.trim(); store.set('qrzKey', S.qrzKey); toast(S.qrzKey ? 'QRZ key saved on this iPad' : 'QRZ key removed'); });
+
+/* auto console */
+$('#autoBtn').addEventListener('click', () => { S.autoOpen = !S.autoOpen; store.set('autoOpen', S.autoOpen); applyView(); if (S.autoOpen && !els.tr.children.length) trAdd('ev', '', 'Auto QSO console open. Pick a mode; nothing is sent until Transmit is ticked (Radio) or you are on Practice.'); });
+function markMode() { document.querySelectorAll('#modeSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === autoMode)); }
+document.querySelectorAll('#modeSeg button').forEach(b => b.addEventListener('click', () => {
+  const m = b.dataset.mode;
+  if (m !== 'off' && !running) { toast('Tap Start listening first'); return; }
+  stopTx(); $('#callBtn').classList.remove('show');
+  autoMode = m; eng.setMode(m); markMode();
+  for (const c of skimmers()) if (c.pinned) delChan(c.id);
+  if (m !== 'off') trAdd('ev', '', `${m === 'answer' ? 'Answering CQs' : 'Calling CQ'}, ${S.style === 'contest' ? 'contest style' : 'regular QSOs'}, ${S.src === 'practice' ? 'Practice band' : S.band}.`);
+  setStat(eng.statusText || '');
+}));
+function markStyle() { document.querySelectorAll('#styleSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.style === S.style)); }
+document.querySelectorAll('#styleSeg button').forEach(b => b.addEventListener('click', () => {
+  S.style = b.dataset.style; store.set('style', S.style); eng.style = S.style; markStyle();
+  if (autoMode !== 'off') { eng.setMode(autoMode); }
+  if (sim) sim.setStyle(S.style);
+}));
+const bs = $('#bandSeg');
+for (const bn of BANDS) { const b = document.createElement('button'); b.textContent = bn.replace('m', ''); b.dataset.band = bn; bs.appendChild(b); }
+function markBand() {
+  bs.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.band === S.band));
+  $('#swrOk').checked = !!swrOk[S.band]; $('#swrBox').classList.toggle('warn', !swrOk[S.band] && txOn);
+  $('#dial').value = S.dial[S.band] || '';
+  $('#dial').placeholder = 'Dial kHz';
+}
+bs.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.band === S.band) return;
+  S.band = b.dataset.band; store.set('band', S.band); markBand();
+  if (eng.t) { eng.state = 'idle'; eng.t = null; }
+  trAdd('ev', '', `Band set to ${S.band}. ${S.src === 'practice' ? '' : 'Check SWR on the radio and tick the box before Auto transmits.'}`);
+  setStat(eng.statusText || '');
+}));
+$('#swrOk').addEventListener('change', e => { swrOk[S.band] = e.target.checked; markBand(); setStat(eng.statusText || ''); });
+$('#dial').addEventListener('change', e => { const v = e.target.value.replace(/[^0-9.]/g, ''); if (v) S.dial[S.band] = v; else delete S.dial[S.band]; store.set('dial', S.dial); markBand(); setStat(eng.statusText || ''); });
+$('#txOn').addEventListener('change', e => {
+  txOn = e.target.checked;
+  if (!txOn) stopTx();
+  markBand(); setStat(eng.statusText || '');
+});
+$('#stopBtn').addEventListener('click', () => stopAll('STOP pressed. Nothing more will be sent.'));
+$('#callBtn').addEventListener('click', () => { $('#callBtn').classList.remove('show'); eng.approve(); });
+$('#adifBtn').addEventListener('click', exportAdif);
+function showTab(log) { $('#tabSig').setAttribute('aria-pressed', !log); $('#tabLog').setAttribute('aria-pressed', log); $('#sgList').hidden = log; $('#logList').hidden = !log; }
+$('#tabSig').addEventListener('click', () => showTab(false));
+$('#tabLog').addEventListener('click', () => showTab(true));
+addEventListener('keydown', e => { if (e.key === 'Escape') stopAll('STOP (Escape key).'); });
 
 setSize(S.size); markBw(); setAuto(S.auto); els.tone.innerHTML = S.tone + '<small>Hz</small>';
-$('#srcMic').setAttribute('aria-pressed', S.src === 'mic'); $('#srcTest').setAttribute('aria-pressed', S.src === 'test');
-renderSaved();
-window.__cw = { dec, S, get lines() { return lines; } };
+$('#srcMic').setAttribute('aria-pressed', S.src === 'mic'); $('#srcTest').setAttribute('aria-pressed', S.src === 'practice');
+markMode(); markStyle(); markBand();
+renderSaved(); applyView(); setStat('Auto is off.');
+window.__cw = { dec, S, eng, chans, get lines() { return lines; }, get log() { return curLog(); }, get sim() { return sim; }, setMode: m => document.querySelector(`#modeSeg [data-mode="${m}"]`).click() };
 }
 </script>
 </body>

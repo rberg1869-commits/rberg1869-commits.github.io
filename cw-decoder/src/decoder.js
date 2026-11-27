@@ -47,6 +47,7 @@ class CWDecoder {
     this.markSum = 0; this.markN = 0;
     this.markLevel = 0; this.open = false;
     this.pending = []; this.sinceOpen = 0; this.sinceMark = 1e9; this.openChar = false;
+    this.pre = []; this.preWord = false;          // characters keyed just before the squelch opened
   }
   setFixedWpm(w) {
     this.fixedWpm = w || 0;
@@ -84,8 +85,12 @@ class CWDecoder {
       if (want === this.cand) this.candRun += fm; else { this.cand = want; this.candRun = fm; }
       if (this.candRun >= minRun) {
         const prior = this.runMs - this.candRun + fm;
-        if (this.state) this.endMark(prior); else this.endGap(prior);
+        let keepGap = false;
+        if (this.state) keepGap = this.endMark(prior) === false; else { this.endGap(prior); this.lastGap = prior; }
         this.state = want; this.runMs = this.candRun; this.candRun = 0;
+        if (keepGap) {                // a noise blip inside a gap: the gap simply carries on
+          this.runMs = this.lastGap + prior + this.runMs; this.sinceMark = this.runMs;
+        }
         if (this.state) { this.markSum = 0; this.markN = 0; }
         this.onKey(this.state && this.open);
         return;
@@ -97,13 +102,17 @@ class CWDecoder {
     else this.idle(this.runMs);
   }
 
+  // Returns false when the mark was a noise blip that is ignored.
   endMark(ms) {
     const lvl = this.markN ? this.markSum / this.markN : 0;
+    // While a station is being copied, a blip far weaker than its keying is noise: skip it entirely,
+    // so it neither prints a stray E or I nor breaks the silence that ends a transmission.
+    if (this.open && ms < 3 * this.dit && lvl < this.markLevel - 9) return false;
     this.markLevel = 0.6 * this.markLevel + 0.4 * lvl;
     const wasOpen = this.open;
     if (!this.open && this.markLevel > this.squelch) this.open = true;
     else if (this.open && this.markLevel < this.squelch - 2) this.open = false;
-    if (this.open && !wasOpen) { if (this.marks.length > 6) this.marks = this.marks.slice(-6); this.sinceOpen = 0; this.openChar = true; }
+    if (this.open && !wasOpen) { if (this.marks.length > 6) this.marks = this.marks.slice(-6); this.sinceOpen = 0; this.openChar = !this.recoverPre(); }
     if (this.open) this.sinceOpen++;
     if (ms > Math.max(10 * this.dit, 600)) { this.elems = []; return; }   // a carrier or tune-up
     this.elems.push({ ms: ms, lvl: lvl });
@@ -120,8 +129,29 @@ class CWDecoder {
     else if (ms < 40 * u) { this.longGaps.push(ms); if (this.longGaps.length > 30) this.longGaps.shift(); this.learnSpacing(); }
   }
 
+  // When the squelch opens part way into a transmission, rescue the characters already keyed,
+  // keeping only those made entirely of signal-strength elements (noise blips are weaker).
+  recoverPre() {
+    const need = Math.max(this.squelch - 2, Math.min(0.55 * this.markLevel, this.markLevel - 9)), keep = [];
+    for (const t of this.pre) {
+      if (t === ' ') { if (keep.length && keep[keep.length - 1] !== ' ') keep.push(' '); continue; }
+      if (t.length && t.every(e => e.lvl >= need)) keep.push(t);
+      else if (keep.length) keep.length = 0;            // a noise character breaks the run: keep only what follows
+    }
+    while (keep.length && keep[0] === ' ') keep.shift();
+    this.pre = []; this.preWord = false;
+    if (!keep.length) return false;
+    if (keep[keep.length - 1] !== ' ') keep.push(' ');
+    this.pending = keep.concat(this.pending);
+    return true;
+  }
+
   idle(ms) {
     const u = this.unit;
+    if (!this.open) {
+      if (this.preWord && ms > (this.wordGap || 5 * u)) { this.pre.push(' '); this.preWord = false; }
+      if (ms > 1500 && this.pre.length) { this.pre = []; this.preWord = false; }
+    }
     if (this.elems.length && ms > 2 * u) { this.emit(); }
     const wg = this.wordGap || 5 * u;
     if (this.wordPending && ms > wg) { this.out(' '); this.wordPending = false; }
@@ -137,9 +167,9 @@ class CWDecoder {
 
   emit() {
     let el = this.elems; this.elems = [];
-    if (!this.open) return;
+    if (!this.open) { this.pre.push(el); if (this.pre.length > 14) this.pre.shift(); this.preWord = true; return; }
     if (this.openChar) {                       // drop noise blips caught just before the signal began
-      const keep = 0.6 * Math.max.apply(null, el.map(e => e.lvl));
+      const mx = Math.max.apply(null, el.map(e => e.lvl)), keep = Math.max(0.6 * mx, mx - 8);   // noise blips sit well below the signal
       el = el.filter(e => e.lvl >= keep);
       this.openChar = false;
       if (!el.length) return;

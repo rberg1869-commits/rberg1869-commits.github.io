@@ -5,6 +5,7 @@ fs.mkdirSync(out, { recursive: true });
 let html = fs.readFileSync('template.html', 'utf8');
 html = html.replace('/*DSP*/', () => fs.readFileSync('dsp.js', 'utf8').trim());
 html = html.replace('/*DECODER*/', () => fs.readFileSync('decoder.js', 'utf8').trim());
+html = html.replace('/*LIBS*/', () => ['qso.js', 'skim.js', 'morse.js', 'qlog.js', 'sim.js'].map(f => fs.readFileSync(f, 'utf8').trim()).join('\n\n'));
 fs.writeFileSync(out + '/index.html', html);
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16263a"/><stop offset="1" stop-color="#070b11"/></linearGradient>
 <linearGradient id="w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd400"/><stop offset=".35" stop-color="#00d7ff"/><stop offset=".75" stop-color="#0069ff"/><stop offset="1" stop-color="#001c6e"/></linearGradient></defs>
